@@ -49,6 +49,9 @@ function createHarness(options = {}) {
     return {
       async processarRelatorioVendedor(rca, targetId) {
         calls.pdf.push({ rca, targetId });
+        if (options.reportImpl) {
+          return options.reportImpl(rca, targetId);
+        }
       }
     };
   };
@@ -111,7 +114,39 @@ test('MOVIMENTACAO preserva Bitrix da Etapa 5 e envia PDFs habilitados', async (
     { rca: 121, targetId: 456 },
     { rca: 122, targetId: 456 }
   ]);
-  assert.deepEqual(calls.delays, [2000, 2000]);
+  assert.deepEqual(calls.delays, [2000]);
+});
+
+test('lista vazia de RCAs usa o fallback seguro de PDFs', async () => {
+  const { runner, calls } = createHarness({
+    mode: 'MOVIMENTACAO',
+    rcas: [],
+    pdfConfig: { ativo: true, modo_teste: false, id_tester: 0 }
+  });
+
+  await runner.run();
+
+  assert.deepEqual(calls.pdf, [
+    { rca: 10, targetId: null },
+    { rca: 110, targetId: null }
+  ]);
+  assert.deepEqual(calls.delays, [2000]);
+});
+
+test('valor inválido de RCAs não é iterado como string e usa o fallback', async () => {
+  const { runner, calls } = createHarness({
+    mode: 'MOVIMENTACAO',
+    rcas: '121,122',
+    pdfConfig: { ativo: true, modo_teste: false, id_tester: 0 }
+  });
+
+  await runner.run();
+
+  assert.deepEqual(calls.pdf, [
+    { rca: 10, targetId: null },
+    { rca: 110, targetId: null }
+  ]);
+  assert.deepEqual(calls.delays, [2000]);
 });
 
 test('MOVIMENTACAO sem PDF ativo não cria serviço de relatório', async () => {
@@ -190,6 +225,29 @@ test('erro libera a trava para a próxima execução', async () => {
   const next = await runner.run();
   assert.equal(next.skipped, false);
   assert.equal(attempts, 2);
+});
+
+test('erro ao enviar PDF libera a trava para uma próxima execução completa', async () => {
+  let reportAttempts = 0;
+  const { runner, calls } = createHarness({
+    mode: 'MOVIMENTACAO',
+    rcas: [10],
+    pdfConfig: { ativo: true, modo_teste: false, id_tester: 0 },
+    reportImpl: async () => {
+      reportAttempts += 1;
+      if (reportAttempts === 1) throw new Error('falha no PDF');
+    }
+  });
+
+  await assert.rejects(runner.run(), /falha no PDF/);
+  assert.equal(runner.isRunning(), false);
+
+  const next = await runner.run();
+  assert.equal(next.skipped, false);
+  assert.equal(next.pdfsSent, 1);
+  assert.equal(runner.isRunning(), false);
+  assert.equal(calls.process.length, 2);
+  assert.equal(calls.reportFactories, 2);
 });
 
 test('cada execução relê a configuração e aplica a policy atual', async () => {

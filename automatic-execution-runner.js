@@ -58,15 +58,20 @@ function createAutomaticExecutionRunner({
       let pdfsSent = 0;
       if (policy.canSendPdf && params.pdf_config?.ativo) {
         const reportService = createReportService();
-        const rcas = params.rcas_rotativa || DEFAULT_PDF_RCAS;
+        const rcas = Array.isArray(params.rcas_rotativa) && params.rcas_rotativa.length > 0
+          ? params.rcas_rotativa
+          : DEFAULT_PDF_RCAS;
         const targetId = params.pdf_config.modo_teste
           ? params.pdf_config.id_tester
           : null;
 
-        for (const rca of rcas) {
+        for (let index = 0; index < rcas.length; index += 1) {
+          const rca = rcas[index];
           await reportService.processarRelatorioVendedor(rca, targetId);
           pdfsSent += 1;
-          await delay(PDF_SEND_DELAY_MS);
+          if (index < rcas.length - 1) {
+            await delay(PDF_SEND_DELAY_MS);
+          }
         }
       }
 
