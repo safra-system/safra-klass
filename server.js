@@ -18,10 +18,12 @@ const MovimentacaoCarteiraService = require('./movimentacao-carteira-service');
 const cron = require('node-cron');
 const RelatorioService = require('./relatorio-service');
 const { createAutomaticExecutionRunner } = require('./automatic-execution-runner');
+const { createWinthorCorrectionRunner } = require('./winthor-correction-runner');
 const {
     EXECUTION_MODES,
     createExecutionPolicy,
-    normalizeCronConfigForWrite
+    normalizeCronConfigForWrite,
+    normalizeWinthorFixConfig
 } = require('./execution-policy');
 const WinthorCadastroCorrecaoService = require('./winthor-cadastro-correcao-service');
 const BitrixService = require('./bitrix-service');
@@ -37,6 +39,11 @@ const winthorCorrecaoService = new WinthorCadastroCorrecaoService({
   logger: console,
   pgPool: rotativoRepo.pool,
   bitrixService
+});
+const correctionRunner = createWinthorCorrectionRunner({
+  paramsRepository: rotativoRepo,
+  correctionService: winthorCorrecaoService,
+  logger: console
 });
 
 const SubstituicaoCarteiraService = require('./substituicao-carteira-service');
@@ -3173,7 +3180,10 @@ app.post('/api/reload-cron', canAccessConfig, async (req, res) => {
 app.post('/api/winthor/corrigir-cadastro-clientes', canAccessConfig, async (req, res) => {
   try {
     const forceRecreateProcedure = Boolean(req.body?.forceRecreateProcedure);
-    const resultado = await winthorCorrecaoService.executarCorrecao({ forceRecreateProcedure });
+    const resultado = await correctionRunner.runCorrection({
+      source: 'MANUAL',
+      forceRecreateProcedure
+    });
     res.json({ success: true, data: resultado });
   } catch (err) {
     console.error('[WinthorFix] Erro ao corrigir cadastro de clientes:', err);
@@ -3214,7 +3224,8 @@ app.post('/api/winthor/rollback-correcao-legado', canAccessConfig, async (req, r
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(20000, Math.trunc(limitRaw))) : 5000;
     const executarCorrecaoPosRollback = req.body?.executarCorrecaoPosRollback !== false;
 
-    const resultado = await winthorCorrecaoService.executarRollbackLegado({
+    const resultado = await correctionRunner.runRollback({
+      source: 'MANUAL',
       execIds,
       codcli,
       dataInicio,
@@ -3376,14 +3387,9 @@ async function obterConfigCorrecaoCadastroWinthor() {
   let intervaloMinutos = 15;
   try {
     const params = await rotativoRepo.obterParametrosSistema();
-    const configFix = params?.winthor_fix_config || {};
-    const flag = configFix?.ativo;
-    enabledByParam = typeof flag === 'boolean' ? flag : true;
-
-    const intervaloRaw = Number(configFix?.intervalo_minutos);
-    if ([1, 15, 30].includes(intervaloRaw)) {
-      intervaloMinutos = intervaloRaw;
-    }
+    const configFix = normalizeWinthorFixConfig(params?.winthor_fix_config);
+    enabledByParam = configFix.ativo;
+    intervaloMinutos = configFix.intervalo_minutos;
   } catch (err) {
     console.error('[WinthorFix] Erro ao ler parametros de configuracao:', err?.message || err);
   }
@@ -3425,7 +3431,11 @@ async function configurarAgendamentoCorrecaoCadastroWinthor() {
 
     cronJobCorrecaoCadastroWinthor = cron.schedule(cfg.cronExpr, async () => {
       try {
-        const resultado = await winthorCorrecaoService.executarCorrecao();
+        const resultado = await correctionRunner.runCorrection({ source: 'CRON' });
+        if (resultado.skipped) {
+          console.log(`[WinthorFix] Execucao agendada ignorada: ${resultado.reason}.`);
+          return;
+        }
         console.log(
           `[WinthorFix/${resultado.ambiente}] OK | Lidos: ${resultado.totalLidos} | Corrigidos: ${resultado.totalCorrigidos} | Logs: ${resultado.totalRegistrosLog || 0}`
         );
@@ -3445,10 +3455,14 @@ async function configurarAgendamentoCorrecaoCadastroWinthor() {
 async function executarCorrecaoCadastroWinthorNoStartupSeConfigurado() {
   const cfg = await obterConfigCorrecaoCadastroWinthor();
   const runOnStartup = parseBooleanEnv(process.env.WINTHOR_FIX_CADASTRO_RUN_ON_STARTUP, false);
-  if (!cfg.enabled || !runOnStartup) return;
+  if (!cfg.enabledByEnv || !runOnStartup) return;
 
   try {
-    const resultado = await winthorCorrecaoService.executarCorrecao();
+    const resultado = await correctionRunner.runCorrection({ source: 'STARTUP' });
+    if (resultado.skipped) {
+      console.log(`[WinthorFix] Execucao de startup ignorada: ${resultado.reason}.`);
+      return;
+    }
     console.log(
       `[WinthorFix/${resultado.ambiente}] Startup | Lidos: ${resultado.totalLidos} | Corrigidos: ${resultado.totalCorrigidos} | Logs: ${resultado.totalRegistrosLog || 0}`
     );

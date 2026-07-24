@@ -16,9 +16,9 @@
     const elPreview = document.getElementById('cron-preview');
     const elOptions = document.getElementById('cron-options');
     const elWinthorFixAtivo = document.getElementById('winthor_fix_ativo');
+    const elWinthorFixSincronizarBitrix = document.getElementById('winthor_fix_sincronizar_bitrix');
     const elWinthorFixStatus = document.getElementById('winthor-fix-status');
     const elWinthorFixIntervalo = document.getElementById('winthor_fix_intervalo');
-    const elWinthorFixOptions = document.getElementById('winthor-fix-options');
     const btnExecutarWinthorFixAgora = document.getElementById('btnExecutarWinthorFixAgora');
     const btnRollbackWinthorFixLegado = document.getElementById('btnRollbackWinthorFixLegado');
     const WINTHOR_FIX_INTERVALOS_VALIDOS = [1, 15, 30];
@@ -485,16 +485,24 @@
         if (!elWinthorFixAtivo || !elWinthorFixStatus) return;
         const intervaloTexto = elWinthorFixIntervalo?.options?.[elWinthorFixIntervalo.selectedIndex]?.text || 'A cada 15 minutos';
 
-        if (elWinthorFixOptions) {
-            elWinthorFixOptions.style.opacity = elWinthorFixAtivo.checked ? '1' : '0.5';
-            elWinthorFixOptions.style.pointerEvents = elWinthorFixAtivo.checked ? 'all' : 'none';
+        const intervalGroup = elWinthorFixIntervalo?.closest('.form-group');
+        if (intervalGroup) {
+            intervalGroup.style.opacity = elWinthorFixAtivo.checked ? '1' : '0.5';
+            intervalGroup.style.pointerEvents = elWinthorFixAtivo.checked ? 'all' : 'none';
         }
 
+        const bitrixPermitido = elAtivo.checked
+            && getSelectedExecutionMode() === 'MOVIMENTACAO'
+            && elWinthorFixSincronizarBitrix?.checked === true;
+        const statusBitrix = bitrixPermitido
+            ? 'Bitrix: PERMITIDO pela política.'
+            : 'Bitrix: BLOQUEADO (exige cron principal ativo, MOVIMENTACAO e flag ligada).';
+
         if (elWinthorFixAtivo.checked) {
-            elWinthorFixStatus.textContent = `Status: ATIVADO (${intervaloTexto.toLowerCase()}).`;
+            elWinthorFixStatus.textContent = `Status: ATIVADO (${intervaloTexto.toLowerCase()}). ${statusBitrix}`;
             elWinthorFixStatus.style.color = 'var(--success)';
         } else {
-            elWinthorFixStatus.textContent = 'Status: DESATIVADO (nenhuma execução automática).';
+            elWinthorFixStatus.textContent = `Status: DESATIVADO (nenhuma execução automática). ${statusBitrix}`;
             elWinthorFixStatus.style.color = 'var(--text-tertiary)';
         }
     }
@@ -508,6 +516,11 @@
     if (elWinthorFixIntervalo) {
         elWinthorFixIntervalo.addEventListener('change', updateWinthorFixStatus);
     }
+    if (elWinthorFixSincronizarBitrix) {
+        elWinthorFixSincronizarBitrix.addEventListener('change', updateWinthorFixStatus);
+    }
+    elAtivo.addEventListener('change', updateWinthorFixStatus);
+    executionModeInputs.forEach((input) => input.addEventListener('change', updateWinthorFixStatus));
     updateWinthorFixStatus();
 
 
@@ -585,6 +598,10 @@
                     const intervalo = WINTHOR_FIX_INTERVALOS_VALIDOS.includes(intervaloRaw) ? intervaloRaw : 15;
                     elWinthorFixIntervalo.value = String(intervalo);
                     syncCustomSelect('custom_winthor_fix_intervalo', elWinthorFixIntervalo.value);
+                }
+
+                if (elWinthorFixSincronizarBitrix) {
+                    elWinthorFixSincronizarBitrix.checked = d?.winthor_fix_config?.sincronizar_bitrix === true;
                 }
                 
                 updateCronPreview();
@@ -669,6 +686,13 @@
                 }
 
                 const d = json.data || {};
+                if (d.skipped) {
+                    await showSystemAlert(`Execução ignorada: ${d.reason || 'motivo não informado'}.`, {
+                        title: 'Correção não iniciada',
+                        type: 'warning'
+                    });
+                    return;
+                }
                 const bitrix = d.bitrixSync || {};
                 await showSystemAlert(
                     `Ambiente: ${d.ambiente || '-'}\n` +
@@ -727,6 +751,13 @@
                 }
 
                 const d = json.data || {};
+                if (d.skipped) {
+                    await showSystemAlert(`Execução ignorada: ${d.reason || 'motivo não informado'}.`, {
+                        title: 'Rollback não iniciado',
+                        type: 'warning'
+                    });
+                    return;
+                }
                 const pos = d.correcaoPosRollback || null;
                 const resumoPos = pos
                     ? `\n\nCorrecao pos-rollback:\n- Lidos: ${pos.totalLidos ?? 0}\n- Corrigidos: ${pos.totalCorrigidos ?? 0}\n- Logs: ${pos.totalRegistrosLog ?? 0}`
@@ -830,6 +861,9 @@
 
             winthor_fix_config: {
                 ativo: elWinthorFixAtivo ? elWinthorFixAtivo.checked : true,
+                sincronizar_bitrix: elWinthorFixSincronizarBitrix
+                    ? elWinthorFixSincronizarBitrix.checked
+                    : false,
                 intervalo_minutos: (() => {
                     const raw = Number(elWinthorFixIntervalo ? elWinthorFixIntervalo.value : 15);
                     return WINTHOR_FIX_INTERVALOS_VALIDOS.includes(raw) ? raw : 15;

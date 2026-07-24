@@ -4,7 +4,7 @@
 const { Pool } = require('pg');
 const oracledb = require('oracledb');
 const dbSwitch = require('./db-switch');
-const { normalizeCronConfig } = require('./execution-policy');
+const { normalizeCronConfig, normalizeWinthorFixConfig } = require('./execution-policy');
 
 class RotativoRepository {
   /**
@@ -1180,14 +1180,7 @@ async obterParametrosSistema() {
             filiais_cron:  Array.isArray(extra.filiais_cron)  ? extra.filiais_cron  : [],
             cron_config:   normalizeCronConfig(extra.cron_config || { ativo: false, datetime: '', frequency: 'monthly' }),
             pdf_config:    extra.pdf_config   || { ativo: false, modo_teste: false, id_tester: 0 },
-            winthor_fix_config: {
-                ativo: (typeof extra?.winthor_fix_config?.ativo === 'boolean')
-                    ? extra.winthor_fix_config.ativo
-                    : true,
-                intervalo_minutos: [1, 15, 30].includes(Number(extra?.winthor_fix_config?.intervalo_minutos))
-                    ? Number(extra.winthor_fix_config.intervalo_minutos)
-                    : 15
-            },
+            winthor_fix_config: normalizeWinthorFixConfig(extra.winthor_fix_config),
         };
 
     } catch (err) {
@@ -1217,14 +1210,7 @@ async salvarParametrosSistema(params) {
             filiais_cron:  params.filiais_cron  ?? [],
             cron_config:   normalizeCronConfig(params.cron_config ?? { ativo: false, datetime: '', frequency: 'monthly' }),
             pdf_config:    params.pdf_config    ?? { ativo: false, modo_teste: false, id_tester: 0 },
-            winthor_fix_config: {
-                ativo: (typeof params?.winthor_fix_config?.ativo === 'boolean')
-                    ? params.winthor_fix_config.ativo
-                    : true,
-                intervalo_minutos: [1, 15, 30].includes(Number(params?.winthor_fix_config?.intervalo_minutos))
-                    ? Number(params.winthor_fix_config.intervalo_minutos)
-                    : 15
-            },
+            winthor_fix_config: normalizeWinthorFixConfig(params.winthor_fix_config),
         };
 
         await conn.query(`

@@ -272,7 +272,7 @@
                             <div>
                                 <span style="font-weight:600; color:var(--text-main)">Correção Automática Cadastro WinThor</span>
                                 <small class="hint" style="margin:0">
-                                    Ativado: executa verificação/correção periódica de CATEGORIA, CODATV1 e CODREDE. Desativado: não executa.
+                                    Confere CATEGORIA com base no CODREDE. Esta rotina não altera CODATV1 nem CODREDE.
                                 </small>
                                 <small class="hint" id="winthor-fix-status" style="margin-top:6px; font-weight:600;"></small>
                             </div>
@@ -300,7 +300,22 @@
                                         <div class="custom-option" data-value="30"><i class="far fa-clock"></i> A cada 30 minutos</div>
                                     </div>
                                 </div>
-                                <small class="hint">Define de quanto em quanto tempo a procedure de correção será executada.</small>
+                                <small class="hint">Define de quanto em quanto tempo a procedure de correção será executada. O intervalo de 1 minuto aumenta o custo da varredura de todos os clientes ativos.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="cron-header">
+                                    <label class="switch">
+                                        <input type="checkbox" id="winthor_fix_sincronizar_bitrix">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <div>
+                                        <span style="font-weight:600; color:var(--text-main)">Sincronizar classificação no Bitrix</span>
+                                        <small class="hint" style="margin:0">
+                                            Ativo efetivo somente quando o cron principal estiver ativo, o modo for MOVIMENTACAO e esta flag estiver ligada.
+                                        </small>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

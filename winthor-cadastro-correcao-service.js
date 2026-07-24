@@ -667,9 +667,13 @@ class WinthorCadastroCorrecaoService {
     return 'SEM_ACAO';
   }
 
-  async _sincronizarClassificacaoBitrix(ajustes, { ambiente, execId }) {
+  async _sincronizarClassificacaoBitrix(
+    ajustes,
+    { ambiente, execId, permitido = false } = {}
+  ) {
     const resumo = {
-      habilitado: Boolean(this.bitrixService),
+      permitido: permitido === true,
+      habilitado: permitido === true && Boolean(this.bitrixService),
       ambiente,
       execId,
       totalPendencias: Array.isArray(ajustes) ? ajustes.length : 0,
@@ -680,6 +684,11 @@ class WinthorCadastroCorrecaoService {
       naoEncontrados: 0,
       erros: 0
     };
+
+    if (!resumo.permitido) {
+      resumo.motivo = 'Sincronização Bitrix bloqueada pela política de execução.';
+      return resumo;
+    }
 
     if (!this.bitrixService) {
       resumo.motivo = 'BitrixService nao configurado.';
@@ -829,7 +838,10 @@ class WinthorCadastroCorrecaoService {
     return resumo;
   }
 
-  async executarCorrecao({ forceRecreateProcedure = false } = {}) {
+  async executarCorrecao({
+    forceRecreateProcedure = false,
+    sincronizarBitrix = false
+  } = {}) {
     const envKey = dbSwitch.getCurrentEnvKey();
     await this.garantirProcedure({ force: forceRecreateProcedure });
     await this._garantirTabelaLogPostgres();
@@ -876,7 +888,11 @@ class WinthorCadastroCorrecaoService {
         totalRegistrosLog = await this._registrarLogsCorrecao(ajustes, { execId, ambiente });
       }
 
-      const bitrixSync = await this._sincronizarClassificacaoBitrix(ajustes, { ambiente, execId });
+      const bitrixSync = await this._sincronizarClassificacaoBitrix(ajustes, {
+        ambiente,
+        execId,
+        permitido: sincronizarBitrix === true
+      });
 
       return {
         ambiente,
@@ -893,7 +909,10 @@ class WinthorCadastroCorrecaoService {
         this.procedureReadyByEnv.delete(envKey);
         this.procedureOwnerByEnv.delete(envKey);
         await this.garantirProcedure({ force: true });
-        return this.executarCorrecao({ forceRecreateProcedure: true });
+        return this.executarCorrecao({
+          forceRecreateProcedure: true,
+          sincronizarBitrix
+        });
       }
       throw err;
     } finally {
@@ -908,8 +927,7 @@ class WinthorCadastroCorrecaoService {
     codcli = null,
     dataInicio = null,
     dataFim = null,
-    limit = 5000,
-    executarCorrecaoPosRollback = true
+    limit = 5000
   } = {}) {
     await this._garantirTabelaLogPostgres();
     const ambiente = dbSwitch.getCurrentEnvName();
@@ -1047,11 +1065,6 @@ class WinthorCadastroCorrecaoService {
       ambiente
     });
 
-    let correcaoPosRollback = null;
-    if (executarCorrecaoPosRollback) {
-      correcaoPosRollback = await this.executarCorrecao();
-    }
-
     return {
       ambiente,
       rollbackExecId,
@@ -1061,7 +1074,7 @@ class WinthorCadastroCorrecaoService {
       codredeRevertidos,
       totalClientesAfetados: clientesAfetados.size,
       totalLogsRollback,
-      correcaoPosRollback,
+      correcaoPosRollback: null,
       executadoEm: new Date().toISOString()
     };
   }

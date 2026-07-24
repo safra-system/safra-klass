@@ -57,7 +57,7 @@ function fullPayload(cron_config) {
     filiais_cron: [1],
     cron_config,
     pdf_config: { ativo: false, modo_teste: false, id_tester: 0 },
-    winthor_fix_config: { ativo: true, intervalo_minutos: 15 }
+    winthor_fix_config: { ativo: true, intervalo_minutos: 15, sincronizar_bitrix: true }
   };
 }
 
@@ -77,4 +77,35 @@ test('salvamento preserva os parâmetros desabilitados e grava o modo', async ()
   const extra = JSON.parse(capturedQueries.at(-1).params[8]);
   assert.equal(extra.cron_config.modo, 'CLASSIFICACAO');
   assert.deepEqual(extra.rcas_rotativa, [10, 110]);
+  assert.equal(extra.winthor_fix_config.sincronizar_bitrix, true);
+});
+
+test('leitura preserva modo válido, agendamento e flag WinThor', async () => {
+  const repo = createRepositoryWithRows([{
+    extra_config: {
+      cron_config: {
+        ativo: true,
+        modo: 'CLASSIFICACAO',
+        datetime: '2026-08-02T23:32',
+        frequency: 'monthly'
+      },
+      winthor_fix_config: {
+        ativo: false,
+        intervalo_minutos: 30,
+        sincronizar_bitrix: true
+      }
+    }
+  }]);
+  const params = await repo.obterParametrosSistema();
+  assert.deepEqual(params.cron_config, {
+    ativo: true,
+    modo: 'CLASSIFICACAO',
+    datetime: '2026-08-02T23:32',
+    frequency: 'monthly'
+  });
+  assert.deepEqual(params.winthor_fix_config, {
+    ativo: false,
+    intervalo_minutos: 30,
+    sincronizar_bitrix: true
+  });
 });
