@@ -9,6 +9,8 @@ Separar o processamento automático em dois modos mutuamente exclusivos:
 
 O sistema terá um único agendamento automático. Nunca haverá dois jobs principais concorrentes nem dois modos ativos simultaneamente.
 
+O modo de execução manual do processamento geral não será implementado nesta versão. Ele fica reservado para uma evolução futura, sem opção de interface, endpoint ou comportamento parcial nesta entrega.
+
 ## Estados válidos
 
 O agendamento principal será representado por uma flag `ativo` e um campo enumerado `modo`.
@@ -222,6 +224,8 @@ Casos mínimos:
 
 ## Fora do escopo
 
+- criar um terceiro modo de execução manual do processamento geral;
+- criar botões ou endpoints para disparar manualmente os modos `CLASSIFICACAO` ou `MOVIMENTACAO`;
 - transformar as operações manuais de substituição em uma trava global;
 - criar transação distribuída entre Oracle, PostgreSQL e Bitrix;
 - alterar fórmulas de pontuação ou faixas;
