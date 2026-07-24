@@ -24,7 +24,9 @@ test('classificação nega todos os efeitos de movimentação', () => {
   assert.equal(policy.canMoveWallet, false);
   assert.equal(policy.canReadBitrix, false);
   assert.equal(policy.canWriteBitrix, false);
+  assert.equal(policy.canUseQueue, false);
   assert.equal(policy.canRunStage5, false);
+  assert.equal(policy.canSendPdf, false);
 });
 
 test('movimentação preserva o fluxo completo', () => {
@@ -36,5 +38,7 @@ test('movimentação preserva o fluxo completo', () => {
   assert.equal(policy.canMoveWallet, true);
   assert.equal(policy.canReadBitrix, true);
   assert.equal(policy.canWriteBitrix, true);
+  assert.equal(policy.canUseQueue, true);
   assert.equal(policy.canRunStage5, true);
+  assert.equal(policy.canSendPdf, true);
 });
