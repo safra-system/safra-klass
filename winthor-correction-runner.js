@@ -56,7 +56,6 @@ function createWinthorCorrectionRunner({
     if (running) return { skipped: true, reason: 'EXECUTION_IN_PROGRESS' };
     running = true;
     try {
-      await readPolicy();
       const result = await correctionService.executarRollbackLegado({
         ...rollbackOptions,
         executarCorrecaoPosRollback: false

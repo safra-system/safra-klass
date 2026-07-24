@@ -144,10 +144,6 @@ test('rollback força serviço puro e pós-correção recalcula policy dentro da
   const harness = createRunnerHarness([
     {
       cron_config: { ativo: true, modo: 'MOVIMENTACAO' },
-      winthor_fix_config: { ativo: true, sincronizar_bitrix: false }
-    },
-    {
-      cron_config: { ativo: true, modo: 'MOVIMENTACAO' },
       winthor_fix_config: { ativo: true, sincronizar_bitrix: true }
     }
   ]);
@@ -156,7 +152,7 @@ test('rollback força serviço puro e pós-correção recalcula policy dentro da
     executarCorrecaoPosRollback: true,
     limit: 10
   });
-  assert.equal(harness.calls.reads, 2);
+  assert.equal(harness.calls.reads, 1);
   assert.equal(harness.calls.rollbacks[0].executarCorrecaoPosRollback, false);
   assert.equal(harness.calls.rollbacks[0].limit, 10);
   assert.equal(harness.calls.corrections[0].sincronizarBitrix, true);
