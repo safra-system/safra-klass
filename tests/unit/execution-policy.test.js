@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   EXECUTION_MODES,
   normalizeCronConfig,
+  normalizeCronConfigForWrite,
   createExecutionPolicy
 } = require('../../execution-policy');
 
@@ -41,4 +42,15 @@ test('movimentação preserva o fluxo completo', () => {
   assert.equal(policy.canUseQueue, true);
   assert.equal(policy.canRunStage5, true);
   assert.equal(policy.canSendPdf, true);
+});
+
+test('escrita rejeita modo explicitamente invalido', () => {
+  assert.throws(
+    () => normalizeCronConfigForWrite({ ativo: true, modo: 'MANUAL' }),
+    /modo.*invalido/i
+  );
+});
+
+test('escrita mantem compatibilidade com configuracao legada', () => {
+  assert.equal(normalizeCronConfigForWrite({ ativo: true }).modo, 'MOVIMENTACAO');
 });

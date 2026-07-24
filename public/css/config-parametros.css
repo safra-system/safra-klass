@@ -73,6 +73,73 @@ input:checked + .slider:before { transform:translateX(24px); }
 /* Cron */
 .cron-header { display:flex; align-items:center; margin-bottom:14px; }
 
+.execution-mode-selector {
+  margin:18px 0 14px;
+  padding:16px;
+  border:1px solid var(--border-default);
+  border-radius:var(--radius-md);
+  background:var(--surface-1);
+}
+
+.execution-mode-label {
+  display:block;
+  margin-bottom:10px;
+  color:var(--text-primary);
+  font-size:.82rem;
+  font-weight:700;
+}
+
+.execution-mode-options {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+
+.execution-mode-option {
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:12px;
+  border:1px solid var(--border-default);
+  border-radius:var(--radius-md);
+  cursor:pointer;
+  transition:border-color .2s ease, background .2s ease;
+}
+
+.execution-mode-option:hover,
+.execution-mode-option:has(input:checked) {
+  border-color:var(--safra-primary);
+  background:rgba(0,125,204,.08);
+}
+
+.execution-mode-option input {
+  margin-top:3px;
+  accent-color:var(--safra-primary);
+}
+
+.execution-mode-option strong,
+.execution-mode-option small { display:block; }
+.execution-mode-option strong { color:var(--text-primary); font-size:.86rem; }
+.execution-mode-option small { margin-top:4px; color:var(--text-tertiary); font-size:.75rem; line-height:1.4; }
+
+.execution-mode-warning {
+  margin:0 0 14px;
+  padding:11px 13px;
+  border-left:3px solid var(--safra-primary);
+  border-radius:var(--radius-sm);
+  background:rgba(0,125,204,.10);
+  color:var(--text-secondary);
+  font-size:.8rem;
+  line-height:1.45;
+}
+
+[data-movement-only] { transition:opacity .2s ease, filter .2s ease; }
+[data-movement-only].execution-section-disabled {
+  opacity:.48;
+  filter:grayscale(.35);
+  border-style:dashed;
+}
+
 .fix-actions {
   margin-top: 12px;
   display: flex;
@@ -277,6 +344,10 @@ body.light .config-ui-modal-detail {
 }
 
 @media (max-width: 640px) {
+  .execution-mode-options {
+    grid-template-columns:1fr;
+  }
+
   .config-ui-modal {
     padding: 14px;
   }

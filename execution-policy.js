@@ -13,6 +13,15 @@ function normalizeCronConfig(raw = {}) {
   return { ...raw, ativo, modo };
 }
 
+function normalizeCronConfigForWrite(raw = {}) {
+  const hasExplicitMode = Object.prototype.hasOwnProperty.call(raw || {}, 'modo');
+  if (hasExplicitMode && !Object.values(EXECUTION_MODES).includes(raw.modo)) {
+    throw new RangeError('Modo de execucao invalido. Use CLASSIFICACAO ou MOVIMENTACAO.');
+  }
+
+  return normalizeCronConfig(raw);
+}
+
 function createExecutionPolicy(raw) {
   const { ativo: enabled, modo } = normalizeCronConfig(raw);
   const canMove = enabled && modo === EXECUTION_MODES.MOVIMENTACAO;
@@ -33,5 +42,6 @@ function createExecutionPolicy(raw) {
 module.exports = {
   EXECUTION_MODES,
   normalizeCronConfig,
+  normalizeCronConfigForWrite,
   createExecutionPolicy
 };

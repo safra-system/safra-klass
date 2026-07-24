@@ -89,13 +89,13 @@
         <div class="card">
             <div class="card-header-strip">
                 <div class="strip-icon"><i class="fas fa-sliders-h"></i></div>
-                <h2>Parâmetros de Movimentação</h2>
+                <h2>Classifica&ccedil;&atilde;o e Movimenta&ccedil;&atilde;o Autom&aacute;tica</h2>
             </div>
 
             <div class="card-body">
                 <form id="configForm">
                     
-                    <div class="settings-block">
+                    <div class="settings-block" id="movement-prazos" data-movement-only>
                         <div class="section-title">
                             <i class="far fa-clock"></i> Prazos e Ciclos
                         </div>
@@ -118,7 +118,7 @@
                         </div>
                     </div>
 
-                    <div class="settings-block">
+                    <div class="settings-block" id="common-sazonalidade">
                         <div class="section-title">
                             <i class="fas fa-cloud-sun"></i> Sazonalidade (Blindagem de Downgrade)
                         </div>
@@ -144,7 +144,7 @@
                         </div>
                     </div>
 
-                    <div class="settings-block">
+                    <div class="settings-block" id="movement-rca" data-movement-only>
                         <div class="section-title">
                             <i class="fas fa-users-cog"></i> Distribuição de Carteira (RCAs)
                         </div>
@@ -166,7 +166,7 @@
                         </div>
                         </div>
 
-                    <div class="settings-block">
+                    <div class="settings-block" id="movement-bitrix" data-movement-only>
                         <div class="section-title">
                             <i class="fas fa-ban"></i> Fases de Bloqueio (Bitrix)
                         </div>
@@ -188,6 +188,23 @@
                                 <span class="slider round"></span>
                             </label>
                             <span style="font-weight:600; color:var(--text-main)">Ativar Execução</span>
+                        </div>
+
+                        <div class="execution-mode-selector" id="cron-mode-selector">
+                            <span class="execution-mode-label">Modo de execu&ccedil;&atilde;o</span>
+                            <div class="execution-mode-options" role="radiogroup" aria-label="Modo de execu&ccedil;&atilde;o autom&aacute;tica">
+                                <label class="execution-mode-option">
+                                    <input type="radio" name="cron_modo" value="CLASSIFICACAO" checked>
+                                    <span><strong>Apenas classifica&ccedil;&atilde;o</strong><small>Atualiza a classe sem movimentar carteiras ou acessar o Bitrix.</small></span>
+                                </label>
+                                <label class="execution-mode-option">
+                                    <input type="radio" name="cron_modo" value="MOVIMENTACAO">
+                                    <span><strong>Classifica&ccedil;&atilde;o com movimenta&ccedil;&atilde;o de carteiras</strong><small>Preserva o fluxo completo de carteira, RCA, Bitrix e relat&oacute;rios.</small></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div id="execution-mode-warning" class="execution-mode-warning config-ui-hidden" role="status" aria-live="polite">
+                            Os par&acirc;metros permanecem salvos, mas n&atilde;o ser&atilde;o usados no modo Apenas classifica&ccedil;&atilde;o.
                         </div>
 
                         <div class="form-grid" id="cron-options" style="margin-top:15px; opacity: 0.5; pointer-events: none;">
@@ -238,7 +255,7 @@
                             </div>
                         </div>
 
-                        <div class="form-group" style="margin-top: 20px;">
+                        <div class="form-group" id="common-filiais" style="margin-top: 20px;">
                             <label>Filiais para Processamento (Separadas por vírgula)</label>
                             <textarea name="filiais_cron" id="filiais_cron" rows="2" placeholder="Ex: 1, 3, 5, 6"></textarea>
                             <small class="hint">Defina quais filiais o robô automático deve analisar.</small>
@@ -246,6 +263,7 @@
 
                         <hr style="border:0; border-top:1px solid var(--border-color); margin:15px 0;">
 
+                        <div id="common-winthor-fix" class="winthor-fix-block">
                         <div class="cron-header">
                             <label class="switch">
                                 <input type="checkbox" id="winthor_fix_ativo">
@@ -295,9 +313,10 @@
                             </button>
                             <small class="hint">Executa imediatamente sem esperar o proximo agendamento. O rollback legado desfaz ajustes antigos de CODATV1/CODREDE com base nos logs.</small>
                         </div>
+                        </div>
                     </div>
 
-                    <div class="settings-block">
+                    <div class="settings-block" id="movement-pdf" data-movement-only>
                         <div class="section-title">
                             <i class="fas fa-file-pdf"></i> Relatórios PDF (Bitrix)
                         </div>
@@ -336,7 +355,7 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary" id="saveBtn">
+                        <button type="submit" class="btn btn-primary" id="saveBtn" disabled>
                             <i class="fas fa-save"></i> Salvar Alterações
                         </button>
                     </div>

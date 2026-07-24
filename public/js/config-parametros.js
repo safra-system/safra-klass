@@ -4,6 +4,10 @@
     // ============================================================
     const form = document.getElementById('configForm');
     const saveBtn = document.getElementById('saveBtn');
+    const executionModeInputs = [...document.querySelectorAll('input[name="cron_modo"]')];
+    const executionModeWarning = document.getElementById('execution-mode-warning');
+    let parametrosCarregados = false;
+    saveBtn.disabled = true;
     
     // Elementos do Cron
     const elAtivo = document.getElementById('cron_ativo');
@@ -161,6 +165,32 @@
 
     // Inicializa Tema
     initTheme();
+
+    function getSelectedExecutionMode() {
+        return executionModeInputs.find((input) => input.checked)?.value || 'CLASSIFICACAO';
+    }
+
+    function updateExecutionModeUi() {
+        const classificationOnly = getSelectedExecutionMode() === 'CLASSIFICACAO';
+        document.querySelectorAll('[data-movement-only]').forEach((block) => {
+            block.classList.toggle('execution-section-disabled', classificationOnly);
+            block.setAttribute('aria-disabled', String(classificationOnly));
+            block.inert = classificationOnly;
+        });
+        executionModeWarning?.classList.toggle('config-ui-hidden', !classificationOnly);
+    }
+
+    function setSelectedExecutionMode(mode) {
+        const selectedMode = ['CLASSIFICACAO', 'MOVIMENTACAO'].includes(mode)
+            ? mode
+            : 'CLASSIFICACAO';
+        const input = executionModeInputs.find((candidate) => candidate.value === selectedMode);
+        if (input) input.checked = true;
+        updateExecutionModeUi();
+    }
+
+    executionModeInputs.forEach((input) => input.addEventListener('change', updateExecutionModeUi));
+    updateExecutionModeUi();
     if (elWinthorFixAtivo) {
         elWinthorFixAtivo.checked = true;
     }
@@ -535,8 +565,10 @@
                     elDatetime.value = d.cron_config.datetime || '';
                     elFreq.value = d.cron_config.frequency || 'monthly';
                     syncCustomSelect('custom_cron_frequency', elFreq.value);
+                    setSelectedExecutionMode(d.cron_config?.modo);
                 } else {
                     elAtivo.checked = false;
+                    setSelectedExecutionMode('CLASSIFICACAO');
                 }
 
                 if (elWinthorFixAtivo) {
@@ -554,6 +586,8 @@
                 
                 updateCronPreview();
                 updateWinthorFixStatus();
+                parametrosCarregados = true;
+                saveBtn.disabled = false;
             }
         } catch (err) {
             console.error('Erro ao carregar parâmetros:', err);
@@ -725,6 +759,7 @@
     // Submit do Form Principal
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!parametrosCarregados) return;
         
         const originalText = saveBtn.innerHTML;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
@@ -785,6 +820,7 @@
             
             cron_config: {
                 ativo: elAtivo.checked,
+                modo: getSelectedExecutionMode(),
                 datetime: elDatetime.value,
                 frequency: elFreq.value
             },
@@ -830,7 +866,7 @@
             });
         } finally {
             saveBtn.innerHTML = originalText;
-            saveBtn.disabled = false;
+            saveBtn.disabled = !parametrosCarregados;
         }
     });
 

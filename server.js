@@ -18,6 +18,7 @@ const MovimentacaoCarteiraService = require('./movimentacao-carteira-service');
 const cron = require('node-cron');
 const RelatorioService = require('./relatorio-service');
 const { createAutomaticExecutionRunner } = require('./automatic-execution-runner');
+const { createExecutionPolicy, normalizeCronConfigForWrite } = require('./execution-policy');
 const WinthorCadastroCorrecaoService = require('./winthor-cadastro-correcao-service');
 const BitrixService = require('./bitrix-service');
 
@@ -3136,7 +3137,15 @@ app.get('/api/parametros', canAccessConfig, async (req, res) => {
 
 app.post('/api/parametros', canAccessConfig, async (req, res) => {
     try {
-        const novosValores = req.body;
+        const novosValores = { ...req.body };
+        try {
+            novosValores.cron_config = normalizeCronConfigForWrite(novosValores.cron_config);
+        } catch (validationError) {
+            return res.status(400).json({
+                success: false,
+                error: 'Modo de execucao invalido. Use CLASSIFICACAO ou MOVIMENTACAO.'
+            });
+        }
         if (!novosValores.dias_rotativa || !novosValores.fases_bitrix_bloqueio) {
             return res.status(400).json({ success: false, error: "Dados incompletos" });
         }
@@ -3223,6 +3232,13 @@ app.post('/api/clear-cache', canAccessConfig, (req, res) => {
 app.post('/api/disparar-relatorios-pdf', canAccessConfig, async (req, res) => {
     try {
         const params = await rotativoRepo.obterParametrosSistema();
+        const policy = createExecutionPolicy(params?.cron_config);
+        if (!policy.canSendPdf) {
+            return res.status(403).json({
+                success: false,
+                error: 'Envio de PDF permitido somente com o cron ativo no modo MOVIMENTACAO.'
+            });
+        }
         if (!params?.pdf_config?.ativo) return res.json({ success: false, error: 'PDF Desativado' });
 
         (async () => {
