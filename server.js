@@ -17,6 +17,7 @@ const dbSwitch = require('./db-switch');
 const MovimentacaoCarteiraService = require('./movimentacao-carteira-service');
 const cron = require('node-cron');
 const RelatorioService = require('./relatorio-service');
+const { createAutomaticExecutionRunner } = require('./automatic-execution-runner');
 const WinthorCadastroCorrecaoService = require('./winthor-cadastro-correcao-service');
 const BitrixService = require('./bitrix-service');
 
@@ -3325,6 +3326,14 @@ function calcularPeriodoUltimos12MesesParaMovCarteira() {
   return { DataIni, DataFim, competencia };
 }
 
+const automaticExecutionRunner = createAutomaticExecutionRunner({
+  paramsRepository: rotativoRepo,
+  createMovementService: () => new MovimentacaoCarteiraService(console),
+  createReportService: () => new RelatorioService(console),
+  calculatePeriod: calcularPeriodoUltimos12MesesParaMovCarteira,
+  logger: console
+});
+
 let cronJobAtual = null;
 let cronJobCorrecaoCadastroWinthor = null;
 
@@ -3469,25 +3478,10 @@ async function configurarAgendamentoDinamico() {
           }
           console.log('🚀 [Agendador] Disparando execução automática!');
           try {
-             const service = new MovimentacaoCarteiraService(console);
-             const { DataIni, DataFim, competencia } = calcularPeriodoUltimos12MesesParaMovCarteira();
-             const currentParams = await rotativoRepo.obterParametrosSistema();
-             const filiaisConfig = (currentParams && currentParams.filiais_cron && currentParams.filiais_cron.length > 0) ? currentParams.filiais_cron : [1, 3, 5, 6];  // âœ… FIX #8: Incluindo filiais 5 e 6
-
-             await service.processarTodosClientesElegiveis({ CodFilial: filiaisConfig, DataIni, DataFim, competencia: null, skipBitrixEtapa5: true });
-
-             console.log(`[Cron] ✅ Execução concluída com sucesso (Bitrix Etapa 5 ignorado).`);
-
-             if (currentParams && currentParams.pdf_config && currentParams.pdf_config.ativo) {
-                console.log('📄 [Agendador] Iniciando geração de PDFs automática...');
-                const relService = new RelatorioService(console);
-                const rcasPDF = currentParams.rcas_rotativa || [10, 110]; 
-                const targetId = currentParams.pdf_config.modo_teste ? currentParams.pdf_config.id_tester : null;
-                for (const rca of rcasPDF) {
-                    await relService.processarRelatorioVendedor(rca, targetId);
-                    await new Promise(r => setTimeout(r, 2000));
-                }
-            }
+             const result = await automaticExecutionRunner.run();
+             if (result.skipped) {
+                 console.log(`[Agendador] Execução ignorada: ${result.reason}.`);
+             }
           } catch (e) { console.error('[Agendador] Erro na execução:', e); }
       };
 
