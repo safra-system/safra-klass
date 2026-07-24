@@ -177,6 +177,9 @@
             block.setAttribute('aria-disabled', String(classificationOnly));
             block.inert = classificationOnly;
         });
+        document.querySelectorAll('[data-required-in-movement]').forEach((control) => {
+            control.required = !classificationOnly;
+        });
         executionModeWarning?.classList.toggle('config-ui-hidden', !classificationOnly);
     }
 

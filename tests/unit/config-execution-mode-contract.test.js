@@ -10,6 +10,12 @@ const html = read('public/config-parametros.html');
 const script = read('public/js/config-parametros.js');
 const server = read('server.js');
 
+function openingTag(tagName, id) {
+  const match = html.match(new RegExp('<' + tagName + '[^>]*id=.' + id + '.[^>]*>', 'i'));
+  assert.ok(match, 'elemento #' + id + ' nao encontrado');
+  return match[0];
+}
+
 test('interface expoe somente os dois modos aprovados', () => {
   const inputs = html.match(/<input[^>]+name=.cron_modo.[^>]*>/g) || [];
   assert.equal(inputs.length, 2);
@@ -37,8 +43,21 @@ test('backend rejeita modo invalido e normaliza legado', () => {
   );
   assert.equal(normalizeCronConfigForWrite({ ativo: true }).modo, 'MOVIMENTACAO');
   assert.equal(normalizeCronConfigForWrite({ ativo: false }).modo, 'CLASSIFICACAO');
-  assert.match(server, /normalizeCronConfigForWrite\(novosValores\.cron_config\)/);
-  assert.match(server, /status\(400\)[\s\S]*Modo de execucao invalido/);
+  const start = server.indexOf("app.post('/api/parametros'");
+  const end = server.indexOf("app.post('/api/reload-cron'", start);
+  const route = server.slice(start, end);
+  assert.ok(start > -1 && end > start);
+  assert.match(route, /normalizeCronConfigForWrite\(novosValores\.cron_config\)/);
+  assert.match(route, /status\(400\)[\s\S]*Modo de execucao invalido/);
+});
+
+test('POST exige campos de movimento somente no modo MOVIMENTACAO', () => {
+  const start = server.indexOf("app.post('/api/parametros'");
+  const end = server.indexOf("app.post('/api/reload-cron'", start);
+  const route = server.slice(start, end);
+  assert.match(server, /const \{[^}]*EXECUTION_MODES[^}]*\} = require\('\.\/execution-policy'\)/);
+  assert.match(route, /cron_config\.modo === EXECUTION_MODES\.MOVIMENTACAO\s*&&/);
+  assert.match(route, /!novosValores\.dias_rotativa[\s\S]*!novosValores\.fases_bitrix_bloqueio/);
 });
 
 test('carrega e salva um unico modo preservando valores', () => {
@@ -61,17 +80,20 @@ test('bloqueio visual usa classe aria e inert', () => {
   assert.match(html, /id=.execution-mode-warning.[^>]+aria-live=.polite./);
 });
 
+test('required acompanha o modo sem limpar valores', () => {
+  ['dias_rotativa', 'dias_longo_prazo', 'dias_protecao_upgrade'].forEach((id) => {
+    const input = openingTag('input', id);
+    assert.match(input, /data-required-in-movement/);
+    assert.match(input, /required/);
+  });
+  assert.match(script, /querySelectorAll\('\[data-required-in-movement\]'\)/);
+  assert.match(script, /control\.required = !classificationOnly/);
+});
+
 test('marca blocos', () => {
-  assert.match(html, /id=.movement-prazos. data-movement-only/);
-  assert.match(html, /id=.movement-rca. data-movement-only/);
-  assert.match(html, /id=.movement-bitrix. data-movement-only/);
-  assert.match(html, /id=.movement-pdf. data-movement-only/);
-  assert.match(html, /data-movement-only/);
+  ['movement-prazos', 'movement-rca', 'movement-bitrix', 'movement-pdf']
+    .forEach((id) => assert.match(openingTag('div', id), /data-movement-only/));
   assert.equal((html.match(/data-movement-only/g) || []).length, 4);
-  assert.match(html, /id=.common-sazonalidade./);
-  assert.match(html, /id=.common-filiais./);
-  assert.match(html, /id=.common-winthor-fix./);
-  assert.doesNotMatch(html, /id=.common-sazonalidade.[^>]*data-movement-only/);
-  assert.doesNotMatch(html, /id=.common-filiais.[^>]*data-movement-only/);
-  assert.doesNotMatch(html, /id=.common-winthor-fix.[^>]*data-movement-only/);
+  ['common-sazonalidade', 'common-filiais', 'common-winthor-fix']
+    .forEach((id) => assert.doesNotMatch(openingTag('div', id), /data-movement-only/));
 });

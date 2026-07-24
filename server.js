@@ -18,7 +18,11 @@ const MovimentacaoCarteiraService = require('./movimentacao-carteira-service');
 const cron = require('node-cron');
 const RelatorioService = require('./relatorio-service');
 const { createAutomaticExecutionRunner } = require('./automatic-execution-runner');
-const { createExecutionPolicy, normalizeCronConfigForWrite } = require('./execution-policy');
+const {
+    EXECUTION_MODES,
+    createExecutionPolicy,
+    normalizeCronConfigForWrite
+} = require('./execution-policy');
 const WinthorCadastroCorrecaoService = require('./winthor-cadastro-correcao-service');
 const BitrixService = require('./bitrix-service');
 
@@ -3146,7 +3150,10 @@ app.post('/api/parametros', canAccessConfig, async (req, res) => {
                 error: 'Modo de execucao invalido. Use CLASSIFICACAO ou MOVIMENTACAO.'
             });
         }
-        if (!novosValores.dias_rotativa || !novosValores.fases_bitrix_bloqueio) {
+        if (
+            novosValores.cron_config.modo === EXECUTION_MODES.MOVIMENTACAO &&
+            (!novosValores.dias_rotativa || !novosValores.fases_bitrix_bloqueio)
+        ) {
             return res.status(400).json({ success: false, error: "Dados incompletos" });
         }
         await rotativoRepo.salvarParametrosSistema(novosValores);
