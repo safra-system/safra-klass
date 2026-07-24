@@ -52,8 +52,13 @@ function createServiceHarness(options = {}) {
     reports: [],
     bitrixReads: [],
     bitrixWrites: [],
+    oracleReads: [],
     stage5: [],
-    events: []
+    events: [],
+    params: [],
+    rcaReads: [],
+    queueReads: [],
+    queueRemovals: []
   };
   const rows = options.rows || performanceRows(options);
   const params = {
@@ -94,6 +99,7 @@ function createServiceHarness(options = {}) {
     },
     rotativoRepo: {
       async obterParametrosSistema() {
+        calls.params.push(true);
         return params;
       },
       async consultarProtecaoAtiva(codcli, dias) {
@@ -107,6 +113,19 @@ function createServiceHarness(options = {}) {
       async syncRotativo(payload) {
         calls.queue.push(payload);
       },
+      async listarTodosRotativos() {
+        calls.queueReads.push(true);
+        return options.rotativos || [{
+          codcli: 1,
+          cliente_nome: 'Cliente 1',
+          classificacao_atual: 'OURO',
+          dias_sem_compra: 60,
+          nota_media: 7.5
+        }];
+      },
+      async removerClienteRotativo(codcli) {
+        calls.queueRemovals.push(codcli);
+      },
       async registrarRemanejamentoGrupo2(payload) {
         calls.movements.push(payload);
       },
@@ -116,7 +135,7 @@ function createServiceHarness(options = {}) {
     },
     clienteRepo: {
       async buscarDadosCadastrais(codcli) {
-        calls.bitrixReads.push({ type: 'cliente', codcli });
+        calls.oracleReads.push({ type: 'cliente', codcli });
         return { CODCLI: codcli, TELEFONE: '0000000000', CODATV1: 12 };
       }
     },
@@ -133,7 +152,16 @@ function createServiceHarness(options = {}) {
         calls.bitrixWrites.push(args);
       }
     },
-    rcaRepo: {},
+    rcaRepo: {
+      async buscarVendedoresDetalhados() {
+        calls.rcaReads.push(true);
+        return options.vendedores || [{
+          CODUSUR: 121,
+          TOTAL_ATUAL: 0,
+          QTD_OURO: 0
+        }];
+      }
+    },
     oraclePool: {
       async getConnection() {
         return oracleConnection;
@@ -406,5 +434,152 @@ test('lote movimentacao preserva skipBitrixEtapa5 e executa etapa 5', async () =
   });
 
   assert.equal(processed[0].policy, policy);
-  assert.deepEqual(calls.stage5, [{ skipBitrix: true }]);
+  assert.deepEqual(calls.stage5, [{ skipBitrix: true, policy }]);
+});
+
+test('policy inativa encerra cliente antes de parametros e performance', async () => {
+  const { service, calls } = createServiceHarness();
+  const policy = createExecutionPolicy({
+    ativo: false,
+    modo: 'CLASSIFICACAO'
+  });
+
+  const result = await service.processarCliente(clientInput(policy));
+
+  assert.equal(result.modoExecucao, 'CLASSIFICACAO');
+  assert.equal(result.ignoradoPorPolicy, true);
+  assert.equal(calls.params.length, 0);
+  assert.equal(calls.performance.length, 0);
+  assert.equal(calls.classificationUpdate.length, 0);
+  assert.equal(calls.wallet.length, 0);
+});
+
+test('policy inativa encerra lote antes de consultar performance', async () => {
+  const { service, calls } = createServiceHarness();
+  const policy = createExecutionPolicy({
+    ativo: false,
+    modo: 'CLASSIFICACAO'
+  });
+
+  const result = await service.processarTodosClientesElegiveis({
+    CodFilial: [1],
+    DataIni: '01/01/2026',
+    DataFim: '30/06/2026',
+    competencia: null,
+    policy
+  });
+
+  assert.equal(result.ignoradoPorPolicy, true);
+  assert.equal(calls.performance.length, 0);
+  assert.equal(calls.params.length, 0);
+  assert.equal(calls.stage5.length, 0);
+});
+
+test('atualizacao de classificacao respeita guarda local canClassify', async () => {
+  const { service, calls } = createServiceHarness();
+
+  const rowsAffected = await service._atualizarClassificacao(
+    1,
+    13,
+    'OURO',
+    policyFor('CLASSIFICACAO')
+  );
+
+  assert.equal(rowsAffected, 1);
+
+  const inactivePolicy = createExecutionPolicy({
+    ativo: false,
+    modo: 'CLASSIFICACAO'
+  });
+  const blockedRows = await service._atualizarClassificacao(
+    1,
+    13,
+    'OURO',
+    inactivePolicy
+  );
+
+  assert.equal(blockedRows, 0);
+  assert.equal(calls.classificationUpdate.length, 1);
+});
+
+test('atualizacao de RCA respeita guarda local canMoveWallet', async () => {
+  const { service, calls } = createServiceHarness();
+
+  const rowsAffected = await service._atualizarRcaCliente(
+    1,
+    118,
+    policyFor('CLASSIFICACAO')
+  );
+
+  assert.equal(rowsAffected, 0);
+  assert.equal(calls.wallet.length, 0);
+});
+
+test('capacidades inconsistentes nao permitem fila nem escrita Bitrix', async () => {
+  const { service, calls } = createServiceHarness({
+    categoria: 'OURO',
+    classeCodigo: 13
+  });
+  const policy = {
+    ...policyFor('MOVIMENTACAO'),
+    canUseQueue: false,
+    canWriteBitrix: false
+  };
+
+  await service.processarCliente(clientInput(policy));
+
+  assert.equal(calls.wallet.length, 1);
+  assert.equal(calls.queue.length, 0);
+  assert.equal(calls.bitrixReads.length > 0, true);
+  assert.equal(calls.bitrixWrites.length, 0);
+});
+
+test('canReadBitrix falso impede leituras e escritas Bitrix', async () => {
+  const { service, calls } = createServiceHarness({
+    categoria: 'OURO',
+    classeCodigo: 13
+  });
+  const policy = {
+    ...policyFor('MOVIMENTACAO'),
+    canReadBitrix: false
+  };
+
+  await service.processarCliente(clientInput(policy));
+
+  assert.equal(calls.wallet.length, 1);
+  assert.equal(calls.bitrixReads.length, 0);
+  assert.equal(calls.bitrixWrites.length, 0);
+});
+
+test('etapa 5 direta em CLASSIFICACAO nao toca efeitos externos', async () => {
+  const { service, calls } = createServiceHarness();
+
+  const result = await service.executarEtapa5Redistribuicao({
+    policy: policyFor('CLASSIFICACAO')
+  });
+
+  assert.equal(result.ignoradoPorPolicy, true);
+  assert.equal(calls.params.length, 0);
+  assert.equal(calls.rcaReads.length, 0);
+  assert.equal(calls.queueReads.length, 0);
+  assert.equal(calls.queueRemovals.length, 0);
+  assert.equal(calls.wallet.length, 0);
+  assert.equal(calls.bitrixReads.length, 0);
+  assert.equal(calls.bitrixWrites.length, 0);
+});
+
+test('etapa 5 respeita canWriteBitrix sem bloquear RCA e fila', async () => {
+  const { service, calls } = createServiceHarness();
+  const policy = {
+    ...policyFor('MOVIMENTACAO'),
+    canWriteBitrix: false
+  };
+
+  await service.executarEtapa5Redistribuicao({ policy });
+
+  assert.equal(calls.wallet.length, 1);
+  assert.equal(calls.queueReads.length, 1);
+  assert.deepEqual(calls.queueRemovals, [1]);
+  assert.equal(calls.bitrixReads.length, 0);
+  assert.equal(calls.bitrixWrites.length, 0);
 });

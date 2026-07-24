@@ -19,6 +19,25 @@ function loadDbSwitch() {
   return require('./db-switch');
 }
 
+function resolveExecutionPolicy(policy) {
+  if (policy !== undefined && policy !== null) {
+    return policy;
+  }
+
+  return createExecutionPolicy({
+    ativo: true,
+    modo: EXECUTION_MODES.MOVIMENTACAO
+  });
+}
+
+function ignoredByPolicy(policy, capability) {
+  return {
+    modoExecucao: policy?.mode,
+    ignoradoPorPolicy: true,
+    capability
+  };
+}
+
 /**
  * Helpers de datas
  */
@@ -143,7 +162,12 @@ async _getRegrasParametros() {
       return pool;
   }
 
-  async _atualizarRcaCliente(codcli, novoRca) {
+  async _atualizarRcaCliente(codcli, novoRca, policy) {
+      const executionPolicy = resolveExecutionPolicy(policy);
+      if (!executionPolicy.canMoveWallet) {
+          return 0;
+      }
+
       const dbSwitch = loadDbSwitch();
       const pool = await this._getPool();
       let conn;
@@ -164,7 +188,12 @@ async _getRegrasParametros() {
       }
   }
 
-  async _atualizarClassificacao(codcli, codRede, categoria) {
+  async _atualizarClassificacao(codcli, codRede, categoria, policy) {
+      const executionPolicy = resolveExecutionPolicy(policy);
+      if (!executionPolicy.canClassify) {
+          return 0;
+      }
+
       const dbSwitch = loadDbSwitch();
       const pool = await this._getPool();
       let conn;
@@ -577,7 +606,12 @@ async _getRegrasParametros() {
     };
   }
 
-  async _persistirClassificacao(base, avaliacao) {
+  async _persistirClassificacao(base, avaliacao, policy) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canClassify) {
+      return avaliacao;
+    }
+
     if (!avaliacao.precisaAtualizar || avaliacao.bloqueadoSazonalidade) {
       return avaliacao;
     }
@@ -585,7 +619,8 @@ async _getRegrasParametros() {
     await this._atualizarClassificacao(
       base.codcli,
       avaliacao.codRedeCorreto,
-      avaliacao.classificacaoNova
+      avaliacao.classificacaoNova,
+      executionPolicy
     );
 
     base.classificacaoAtual = avaliacao.classificacaoNova;
@@ -599,8 +634,14 @@ async _getRegrasParametros() {
     return avaliacao;
   }
 
-  async _registrarUpgrade(base, avaliacao) {
-    if (!avaliacao.atualizado || !avaliacao.isUpgrade || !this.rotativoRepo) {
+  async _registrarUpgrade(base, avaliacao, policy) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (
+      !executionPolicy.canClassify ||
+      !avaliacao.atualizado ||
+      !avaliacao.isUpgrade ||
+      !this.rotativoRepo
+    ) {
       return;
     }
 
@@ -613,10 +654,10 @@ async _getRegrasParametros() {
     });
   }
 
-  async _processarClassificacao(base, params) {
+  async _processarClassificacao(base, params, policy) {
     const avaliacao = this._avaliarClassificacao(base, params);
-    await this._persistirClassificacao(base, avaliacao);
-    await this._registrarUpgrade(base, avaliacao);
+    await this._persistirClassificacao(base, avaliacao, policy);
+    await this._registrarUpgrade(base, avaliacao, policy);
     return avaliacao;
   }
 
@@ -654,10 +695,55 @@ async _getRegrasParametros() {
     return { bloqueado: true, motivo };
   }
 
+  async _syncRotativo(cliente, policy) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canUseQueue || !this.rotativoRepo) {
+      return;
+    }
+    return this.rotativoRepo.syncRotativo(cliente);
+  }
+
+  async _listarClientesRotativos(policy) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canUseQueue || !this.rotativoRepo) {
+      return [];
+    }
+    return this.rotativoRepo.listarTodosRotativos();
+  }
+
+  async _removerClienteRotativo(codcli, policy) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canUseQueue || !this.rotativoRepo) {
+      return;
+    }
+    return this.rotativoRepo.removerClienteRotativo(codcli);
+  }
+
+  async _buscarContatoBitrix(dadosCadastrais, policy) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canReadBitrix) {
+      return null;
+    }
+    return this.bitrixService.buscarContatoPorTelefones(dadosCadastrais);
+  }
+
+  async _atualizarContatoBitrix(args, policy) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canWriteBitrix) {
+      return;
+    }
+    return this.bitrixService.atualizarContato(...args);
+  }
+
   // ===================================================================
   // ETAPA 3.2: EXCECAO DE NEGOCIACAO BITRIX
   // ===================================================================
-  async _verificarExcecaoBitrix(base, params) {
+  async _verificarExcecaoBitrix(base, params, policy) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canReadBitrix) {
+      return { bloqueado: false };
+    }
+
     // Só verificamos se o cliente estiver indo para Longo Prazo ou Rotativa crítica
     // Para otimizar API calls, não checamos clientes 'NORMAL'
     
@@ -672,7 +758,10 @@ async _getRegrasParametros() {
         }
 
         // 2. Buscar Contact ID no Bitrix
-        const contactId = await this.bitrixService.buscarContatoPorTelefones(dadosCadastrais);
+        const contactId = await this._buscarContatoBitrix(
+          dadosCadastrais,
+          executionPolicy
+        );
         if (!contactId) {
             this.logger?.log?.(`[Etapa 3.2] Contato não encontrado no Bitrix. Sem bloqueio.`);
             return { bloqueado: false };
@@ -754,10 +843,25 @@ async _getRegrasParametros() {
   // 🚀 ETAPA 5: REDISTRIBUIÇÃO INTELIGENTE (COTAS + TETO ABSOLUTO)
   // ===================================================================
 
-  async executarEtapa5Redistribuicao({ skipBitrix = false } = {}) {
+  async executarEtapa5Redistribuicao({
+    skipBitrix = false,
+    policy
+  } = {}) {
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canRunStage5) {
+      return ignoredByPolicy(executionPolicy, 'canRunStage5');
+    }
+    if (!executionPolicy.canUseQueue) {
+      return ignoredByPolicy(executionPolicy, 'canUseQueue');
+    }
+    const canSyncBitrix =
+      !skipBitrix &&
+      executionPolicy.canReadBitrix &&
+      executionPolicy.canWriteBitrix;
+
     this.logger?.log?.(
       `🚀 [Etapa 5] Iniciando Distribuição (Respeitando Cotas vs Upgrades)... Bitrix: ${
-        skipBitrix ? 'DESLIGADO (modo teste)' : 'ATIVO'
+        canSyncBitrix ? 'ATIVO' : 'DESLIGADO'
       }`
     );
 
@@ -789,7 +893,7 @@ async _getRegrasParametros() {
     }
 
     // 3. Buscar Clientes na fila do Postgres (Rotativa)
-    let clientesRotativa = await this.rotativoRepo.listarTodosRotativos();
+    let clientesRotativa = await this._listarClientesRotativos(executionPolicy);
     if (!clientesRotativa || clientesRotativa.length === 0) {
         this.logger?.log?.('[Etapa 5] Fila rotativa vazia. Nada a distribuir.');
         return;
@@ -897,25 +1001,41 @@ async _getRegrasParametros() {
 
             try {
                 // A. Atualiza WinThor (Oracle)
-                await this._atualizarRcaCliente(codcli, rcaNovo);
+                const rowsAffected = await this._atualizarRcaCliente(
+                  codcli,
+                  rcaNovo,
+                  executionPolicy
+                );
+                if (!rowsAffected) {
+                  this.logger?.log?.(
+                    `[Etapa 5] RCA nao atualizado para Cli ${codcli}; efeitos posteriores ignorados.`
+                  );
+                  continue;
+                }
 
                 // B. Atualiza Bitrix (somente se skipBitrix = false)
                 // ✅ FIX #13: Reutiliza dadosCad já buscado acima (evita query Oracle duplicada)
-                if (!skipBitrix) {
+                if (canSyncBitrix) {
                   if (dadosCad) {
-                      const bId = await this.bitrixService.buscarContatoPorTelefones(dadosCad);
+                      const bId = await this._buscarContatoBitrix(
+                        dadosCad,
+                        executionPolicy
+                      );
                       if (bId) {
                           // ATENÇÃO: Passamos 'params' aqui para ler o mapa dinâmico do banco
                           const targetBitrixUser = this._obterBitrixIdPorRca(rcaNovo, params);
                           
                           if (targetBitrixUser) {
-                              await this.bitrixService.atualizarContato(bId, 118, rcaNovo, targetBitrixUser);
+                              await this._atualizarContatoBitrix(
+                                [bId, 118, rcaNovo, targetBitrixUser],
+                                executionPolicy
+                              );
                           } else {
                               this.logger?.warn?.(`[Etapa 5] ID Bitrix não configurado para RCA ${rcaNovo}. Pulando atualização no CRM.`);
                           }
                       }
                   }
-                } else {
+                } else if (skipBitrix) {
                   this.logger?.log?.(
                     `[Etapa 5] [TEST] Bitrix NÃO atualizado para Cli ${codcli} (skipBitrix=true).`
                   );
@@ -924,7 +1044,10 @@ async _getRegrasParametros() {
                 // C. Postgres (Log e Remoção da Fila)
                 if (this.rotativoRepo) {
                     // Remove da lista de espera
-                    await this.rotativoRepo.removerClienteRotativo(codcli);
+                    await this._removerClienteRotativo(
+                      codcli,
+                      executionPolicy
+                    );
                     
                     // Registra o histórico da mudança
                     await this.rotativoRepo.registrarRemanejamentoGrupo2({
@@ -974,24 +1097,43 @@ async _getRegrasParametros() {
 
             try {
                 // A. Atualiza WinThor (Oracle) para RCA 118
-                await this._atualizarRcaCliente(codcli, 118);
+                const rowsAffected = await this._atualizarRcaCliente(
+                  codcli,
+                  118,
+                  executionPolicy
+                );
+                if (!rowsAffected) {
+                  this.logger?.log?.(
+                    `[Etapa 5] RCA nao atualizado para Cli ${codcli}; efeitos posteriores ignorados.`
+                  );
+                  continue;
+                }
 
                 // B. Atualiza Bitrix para a usuária do RCA 118 (Márcia / Atendimento)
-                if (!skipBitrix) {
+                if (canSyncBitrix) {
                   const dadosCad = await this.clienteRepo.buscarDadosCadastrais(codcli);
                   if (dadosCad) {
-                      const bId = await this.bitrixService.buscarContatoPorTelefones(dadosCad);
+                      const bId = await this._buscarContatoBitrix(
+                        dadosCad,
+                        executionPolicy
+                      );
                       if (bId) {
                           // ID da Márcia/Atendimento (Substitua pelo ID correto do Bitrix se necessário)
                           const bitrixId118 = 122; 
-                          await this.bitrixService.atualizarContato(bId, 118, 118, bitrixId118);
+                          await this._atualizarContatoBitrix(
+                            [bId, 118, 118, bitrixId118],
+                            executionPolicy
+                          );
                       }
                   }
                 }
 
                 // C. Remove da fila e registra no Postgres
                 if (this.rotativoRepo) {
-                    await this.rotativoRepo.removerClienteRotativo(codcli);
+                    await this._removerClienteRotativo(
+                      codcli,
+                      executionPolicy
+                    );
                     
                     await this.rotativoRepo.registrarRemanejamentoGrupo2({
                         codcli,
@@ -1024,12 +1166,10 @@ async _getRegrasParametros() {
     DataFim,
     policy
   }) {
-    const executionPolicy =
-      policy ||
-      createExecutionPolicy({
-        ativo: true,
-        modo: EXECUTION_MODES.MOVIMENTACAO
-      });
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canClassify) {
+      return ignoredByPolicy(executionPolicy, 'canClassify');
+    }
     // 1. CARREGA PARÂMETROS DINÂMICOS 
     const params = await this._getRegrasParametros();
     // 1. ETAPA 1: Montar Base
@@ -1038,7 +1178,11 @@ async _getRegrasParametros() {
     });
     base.modoExecucao = executionPolicy.mode;
 
-    const classificacao = await this._processarClassificacao(base, params);
+    const classificacao = await this._processarClassificacao(
+      base,
+      params,
+      executionPolicy
+    );
     const resultadoClassificacao = {
       ...base,
       modoExecucao: executionPolicy.mode,
@@ -1079,7 +1223,11 @@ async _getRegrasParametros() {
          const isAltoCheck = (faixaCheck === 'DIAMANTE' || faixaCheck === 'PLATINUM');
          const thresholdBitrix = isAltoCheck ? (params?.dias_rotativa_alto || 45) : (params?.dias_rotativa || 60);
          if (base.diasSemCompra >= thresholdBitrix) {
-             const excecaoBitrix = await this._verificarExcecaoBitrix(base, params);
+             const excecaoBitrix = await this._verificarExcecaoBitrix(
+               base,
+               params,
+               executionPolicy
+             );
              if (excecaoBitrix.bloqueado) {
                  statusExcecao = excecaoBitrix; // Sobrescreve com o bloqueio do Bitrix
              }
@@ -1115,7 +1263,7 @@ async _getRegrasParametros() {
         // 4.1 Sync Rotativo
         if (this.rotativoRepo && comGrupo.codcli) {
             try {
-                await this.rotativoRepo.syncRotativo(comGrupo);
+                await this._syncRotativo(comGrupo, executionPolicy);
             } catch (err) {
                 this.logger?.error?.(
                     '[MovCarteira] Erro ao sincronizar tabela clientes_rotativos:',
@@ -1131,7 +1279,11 @@ async _getRegrasParametros() {
 
             // (a) Atualização no Oracle TESTE
             try {
-                await this._atualizarRcaCliente(comGrupo.codcli, rcaNovo);
+                await this._atualizarRcaCliente(
+                  comGrupo.codcli,
+                  rcaNovo,
+                  executionPolicy
+                );
                 this.logger?.log?.(`[MovCarteira] (Grupo 2) UPDATE TESTE PCCLIENT CODCLI=${comGrupo.codcli} RCA ${rcaAnterior} → ${rcaNovo} (Sucesso)`);
             } catch (err) {
                 if (this.logger?.error) {
@@ -1169,19 +1321,32 @@ async _getRegrasParametros() {
             }
 
             // (c) Atualização Bitrix
-            try {
-                const dadosCadastrais = await this.clienteRepo.buscarDadosCadastrais(comGrupo.codcli);
-                
+            if (
+              executionPolicy.canReadBitrix &&
+              executionPolicy.canWriteBitrix
+            ) {
+              try {
+                const dadosCadastrais =
+                  await this.clienteRepo.buscarDadosCadastrais(comGrupo.codcli);
+
                 if (dadosCadastrais) {
-                    const bitrixId = await this.bitrixService.buscarContatoPorTelefones(dadosCadastrais);
+                    const bitrixId = await this._buscarContatoBitrix(
+                      dadosCadastrais,
+                      executionPolicy
+                    );
 
                     if (bitrixId) {
-                        await this.bitrixService.atualizarContato(bitrixId, rcaAnterior, rcaNovo);
-                    } 
-                } 
-
-            } catch (err) {
-                this.logger?.error?.(`[MovCarteira] Erro na integração Bitrix: ${err.message}`);
+                        await this._atualizarContatoBitrix(
+                          [bitrixId, rcaAnterior, rcaNovo],
+                          executionPolicy
+                        );
+                    }
+                }
+              } catch (err) {
+                this.logger?.error?.(
+                  `[MovCarteira] Erro na integração Bitrix: ${err.message}`
+                );
+              }
             }
         }
     }
@@ -1196,14 +1361,6 @@ async _getRegrasParametros() {
     return comGrupo;
   }
 
-    /**
-   * Processa automaticamente TODOS os clientes elegíveis em uma base,
-   * respeitando o ambiente atual do db-switch (TEST/PROD).
-   *
-   * - Usa PerformanceClientes para descobrir quem existe no período/filiais.
-   * - Para cada CODCLI, reaproveita o fluxo atual do processarCliente (Etapas 1, 2, 3, 4).
-   * - Ao final, executa a Etapa 5 (Redistribuição na carteira rotativa).
-   */
   /**
    * Processa automaticamente TODOS os clientes elegíveis em uma base,
    * respeitando o ambiente atual do db-switch (TEST/PROD).
@@ -1227,12 +1384,10 @@ async _getRegrasParametros() {
     skipBitrixEtapa5 = false,
     policy
   }) {
-    const executionPolicy =
-      policy ||
-      createExecutionPolicy({
-        ativo: true,
-        modo: EXECUTION_MODES.MOVIMENTACAO
-      });
+    const executionPolicy = resolveExecutionPolicy(policy);
+    if (!executionPolicy.canClassify) {
+      return ignoredByPolicy(executionPolicy, 'canClassify');
+    }
     const filiais = Array.isArray(CodFilial) ? CodFilial : [CodFilial];
 
     this.logger?.log?.('===================================================');
@@ -1331,7 +1486,10 @@ async _getRegrasParametros() {
     );
 
     try {
-      await this.executarEtapa5Redistribuicao({ skipBitrix: skipBitrixEtapa5 });
+      await this.executarEtapa5Redistribuicao({
+        skipBitrix: skipBitrixEtapa5,
+        policy: executionPolicy
+      });
       this.logger?.log?.(
         `[MovCarteira] Etapa 5 executada com sucesso após processamento em massa. Bitrix ${
           skipBitrixEtapa5 ? 'NÃO foi acionado (modo teste).' : 'foi acionado normalmente.'
