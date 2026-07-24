@@ -4,14 +4,20 @@
 const { Pool } = require('pg');
 const oracledb = require('oracledb');
 const dbSwitch = require('./db-switch');
+const { normalizeCronConfig } = require('./execution-policy');
 
 class RotativoRepository {
   /**
    * @param {Console|{log:Function,error:Function}} logger
    */
-  constructor(logger) {
+  constructor(logger, options = {}) {
     this.logger = logger || console;
     this._protecaoManualSchemaReady = false;
+
+    if (options.pool) {
+      this.pool = options.pool;
+      return;
+    }
 
     const connString = process.env.POSTGRES_CONN_STRING;
     if (!connString) {
@@ -1172,7 +1178,7 @@ async obterParametrosSistema() {
             // Campos vindos do JSONB extra_config
             rcas_rotativa: Array.isArray(extra.rcas_rotativa) ? extra.rcas_rotativa : [],
             filiais_cron:  Array.isArray(extra.filiais_cron)  ? extra.filiais_cron  : [],
-            cron_config:   extra.cron_config  || { ativo: false, datetime: '', frequency: 'monthly' },
+            cron_config:   normalizeCronConfig(extra.cron_config || { ativo: false, datetime: '', frequency: 'monthly' }),
             pdf_config:    extra.pdf_config   || { ativo: false, modo_teste: false, id_tester: 0 },
             winthor_fix_config: {
                 ativo: (typeof extra?.winthor_fix_config?.ativo === 'boolean')
@@ -1209,7 +1215,7 @@ async salvarParametrosSistema(params) {
         const extraConfig = {
             rcas_rotativa: params.rcas_rotativa ?? [],
             filiais_cron:  params.filiais_cron  ?? [],
-            cron_config:   params.cron_config   ?? { ativo: false, datetime: '', frequency: 'monthly' },
+            cron_config:   normalizeCronConfig(params.cron_config ?? { ativo: false, datetime: '', frequency: 'monthly' }),
             pdf_config:    params.pdf_config    ?? { ativo: false, modo_teste: false, id_tester: 0 },
             winthor_fix_config: {
                 ativo: (typeof params?.winthor_fix_config?.ativo === 'boolean')
