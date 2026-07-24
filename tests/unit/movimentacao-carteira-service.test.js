@@ -75,6 +75,7 @@ function createServiceHarness(options = {}) {
     async execute(sql, binds) {
       if (sql.includes('CODUSUR1')) {
         calls.wallet.push({ codcli: binds.codcli, novoRca: binds.novoRca });
+        return { rowsAffected: 1 };
       } else {
         calls.events.push('classificationUpdate');
         calls.classificationUpdate.push({
@@ -85,8 +86,10 @@ function createServiceHarness(options = {}) {
           binds
         });
         if (options.classificationError) throw options.classificationError;
+        return {
+          rowsAffected: options.classificationRowsAffected ?? 1
+        };
       }
-      return { rowsAffected: 1 };
     },
     async close() {}
   };
@@ -258,6 +261,22 @@ test('falha ao persistir classificacao impede efeitos posteriores', async () => 
   assert.equal(calls.bitrixReads.length, 0);
   assert.equal(calls.bitrixWrites.length, 0);
   assert.equal(calls.reports.length, 0);
+});
+
+test('update sem linhas afetadas interrompe classificacao antes do upgrade', async () => {
+  const { service, calls } = createServiceHarness({
+    classificationRowsAffected: 0
+  });
+
+  await assert.rejects(
+    service.processarCliente(clientInput(policyFor('CLASSIFICACAO'))),
+    /nenhuma linha.*CODCLI 1/i
+  );
+
+  assert.equal(calls.classificationUpdate.length, 1);
+  assert.equal(calls.upgrades.length, 0);
+  assert.equal(calls.reports.length, 0);
+  assert.deepEqual(calls.events, ['classificationUpdate']);
 });
 
 test('classificacao bloqueia gravacao de downgrade durante sazonalidade', async () => {

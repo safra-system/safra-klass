@@ -616,12 +616,18 @@ async _getRegrasParametros() {
       return avaliacao;
     }
 
-    await this._atualizarClassificacao(
+    const rowsAffected = await this._atualizarClassificacao(
       base.codcli,
       avaliacao.codRedeCorreto,
       avaliacao.classificacaoNova,
       executionPolicy
     );
+
+    if (!Number.isFinite(rowsAffected) || rowsAffected <= 0) {
+      throw new Error(
+        `[MovCarteira] Classificacao nao persistida: nenhuma linha afetada para CODCLI ${base.codcli} (rowsAffected=${rowsAffected}).`
+      );
+    }
 
     base.classificacaoAtual = avaliacao.classificacaoNova;
     base.classeCodigo = avaliacao.codRedeCorreto;
