@@ -6,14 +6,18 @@
 // ✅ Etapa 3.3: Exceção de Sazonalidade (Bloqueio de Downgrade na Chuva - Out a Mar)
 // ✅ Etapa 2: Classificação e Ações (Ignorada se houver bloqueio de fluxo)
 
-const PerformanceClientes = require('./performance-clientes');
-const RotativoRepository = require('./rotativo-repository'); 
-//const { atualizarRcaClienteTeste, atualizarClassificacaoCliente } = require('./winthor-teste-connection');
-const ClienteRepository = require('./cliente-repository'); 
-const BitrixService = require('./bitrix-service'); 
-const RcaRepository = require('./rca-repository');        
-const dbSwitch = require('./db-switch');
-const oracledb = require('oracledb');
+const { createExecutionPolicy, EXECUTION_MODES } = require('./execution-policy');
+
+let PerformanceClientes;
+
+function loadPerformanceClientes() {
+  PerformanceClientes ||= require('./performance-clientes');
+  return PerformanceClientes;
+}
+
+function loadDbSwitch() {
+  return require('./db-switch');
+}
 
 /**
  * Helpers de datas
@@ -35,29 +39,47 @@ class MovimentacaoCarteiraService {
   /**
    * @param {Console|{log:Function,error:Function}} logger
    */
-  constructor(logger) {
+  constructor(logger, dependencies = {}) {
     this.logger = logger || console;
-    this.performance = new PerformanceClientes();
+    const hasDependency = (name) =>
+      Object.prototype.hasOwnProperty.call(dependencies, name);
 
-    this.rcaRepo = new RcaRepository(this.logger);
+    this.performance = hasDependency('performance')
+      ? dependencies.performance
+      : new (loadPerformanceClientes())();
+    this.rcaRepo = hasDependency('rcaRepo')
+      ? dependencies.rcaRepo
+      : new (require('./rca-repository'))(this.logger);
     
     // Dependências para Bitrix/Postgres:
-    this.clienteRepo = new ClienteRepository();
-    this.bitrixService = new BitrixService(this.logger); 
+    this.clienteRepo = hasDependency('clienteRepo')
+      ? dependencies.clienteRepo
+      : new (require('./cliente-repository'))();
+    this.bitrixService = hasDependency('bitrixService')
+      ? dependencies.bitrixService
+      : new (require('./bitrix-service'))(this.logger);
+    this.oraclePool = hasDependency('oraclePool')
+      ? dependencies.oraclePool
+      : null;
     //Cache para não consultar o banco a cada milissegundo
     this.cachedParams = null;
     this.lastParamsFetch = 0;
 
     // Inicializa RotativoRepository
-    try {
-      this.rotativoRepo = new RotativoRepository(this.logger);
-    } catch (err) {
-      this.rotativoRepo = null;
-      if (this.logger?.error) {
-        this.logger.error(
-          '[MovCarteira] Erro ao inicializar RotativoRepository:',
-          err && err.message ? err.message : err
-        );
+    if (hasDependency('rotativoRepo')) {
+      this.rotativoRepo = dependencies.rotativoRepo;
+    } else {
+      try {
+        const RotativoRepository = require('./rotativo-repository');
+        this.rotativoRepo = new RotativoRepository(this.logger);
+      } catch (err) {
+        this.rotativoRepo = null;
+        if (this.logger?.error) {
+          this.logger.error(
+            '[MovCarteira] Erro ao inicializar RotativoRepository:',
+            err && err.message ? err.message : err
+          );
+        }
       }
     }
   }
@@ -106,6 +128,12 @@ async _getRegrasParametros() {
   // NOVOS MÉTODOS COM DB-SWITCH
   // ===================================================================
   async _getPool() {
+      if (this.oraclePool) {
+          return this.oraclePool;
+      }
+
+      const dbSwitch = loadDbSwitch();
+      const oracledb = require('oracledb');
       let pool = dbSwitch.getPool();
       if (!pool) {
           const config = dbSwitch.getConfig();
@@ -116,6 +144,7 @@ async _getRegrasParametros() {
   }
 
   async _atualizarRcaCliente(codcli, novoRca) {
+      const dbSwitch = loadDbSwitch();
       const pool = await this._getPool();
       let conn;
       try {
@@ -135,18 +164,18 @@ async _getRegrasParametros() {
       }
   }
 
-  async _atualizarClassificacao(codcli, codRede, categoria, codAtv) {
+  async _atualizarClassificacao(codcli, codRede, categoria) {
+      const dbSwitch = loadDbSwitch();
       const pool = await this._getPool();
       let conn;
       try {
           conn = await pool.getConnection();
-          // ✅ FIX: Agora atualiza também o CODATV1 para garantir a segmentação correta no WinThor
           const result = await conn.execute(
-              `UPDATE PCCLIENT SET CODREDE = :codRede, CATEGORIA = :categoria, CODATV1 = :codAtv WHERE CODCLI = :codcli`,
-              { codRede, categoria, codAtv, codcli },
+              `UPDATE PCCLIENT SET CODREDE = :codRede, CATEGORIA = :categoria WHERE CODCLI = :codcli`,
+              { codRede, categoria, codcli },
               { autoCommit: true }
           );
-          this.logger?.log?.(`[Oracle/${dbSwitch.getCurrentEnvName()}] Classificação atualizada: Cli ${codcli} -> Rede ${codRede}, Cat ${categoria}, Atv ${codAtv}`);
+          this.logger?.log?.(`[Oracle/${dbSwitch.getCurrentEnvName()}] Classificação atualizada: Cli ${codcli} -> Rede ${codRede}, Cat ${categoria}`);
           return result.rowsAffected;
       } catch (err) {
           this.logger?.error?.(`Erro ao atualizar classificação no Oracle (${dbSwitch.getCurrentEnvName()}):`, err);
@@ -487,108 +516,146 @@ async _getRegrasParametros() {
   // ===================================================================
   // ETAPA 3.1 E 3.3: UPGRADE (EXCEÇÃO 1) e SAZONALIDADE (EXCEÇÃO 3)
   // ===================================================================
-  async _verificarUpgradeEAtualizar(base, params) {
-    const { 
-        codcli, cliente, faixaCalculada, classificacaoAtual, classeCodigo, ramoAtividadeNome 
+  _avaliarClassificacao(base, params) {
+    const {
+      codcli,
+      faixaCalculada,
+      classificacaoAtual,
+      classeCodigo,
+      ramoAtividadeNome
     } = base;
 
-    // Se classificacaoAtual vier nula, tentamos atualizar o cadastro mas não bloqueamos
-    if (!faixaCalculada || !ramoAtividadeNome) return { bloqueado: false }; 
+    if (!faixaCalculada || !ramoAtividadeNome) {
+      return {
+        precisaAtualizar: false,
+        atualizado: false,
+        isUpgrade: false,
+        isDowngrade: false,
+        bloqueadoSazonalidade: false
+      };
+    }
 
-    // Define dias de proteção (Default: 60)
+    const codRedeCorreto = this._calcularCodRedePelaRegra(
+      ramoAtividadeNome,
+      faixaCalculada
+    );
+    const nivelNovo = this._getNivelFaixa(faixaCalculada);
+    const nivelBanco = this._getNivelFaixa(classificacaoAtual);
+    const precisaAtualizar =
+      nivelNovo !== nivelBanco || Number(classeCodigo) !== codRedeCorreto;
+    const isUpgrade = nivelNovo > nivelBanco;
+    const isDowngrade = nivelNovo < nivelBanco;
+    const bloqueadoSazonalidade =
+      precisaAtualizar &&
+      isDowngrade &&
+      this._isTemporadaAguas(
+        params?.meses_sazonalidade_inicio,
+        params?.meses_sazonalidade_fim
+      );
+
+    if (precisaAtualizar) {
+      this.logger?.log?.(
+        `[Etapa 3/Divergencia] Cli ${codcli}: Banco[${classificacaoAtual}/ID:${classeCodigo}] vs Real[${faixaCalculada}/ID:${codRedeCorreto}]`
+      );
+    }
+
+    if (bloqueadoSazonalidade) {
+      this.logger?.log?.(
+        `[Etapa 3/Sazonalidade] Downgrade bloqueado (${classificacaoAtual} -> ${faixaCalculada}). Mantendo classificacao atual.`
+      );
+    }
+
+    return {
+      precisaAtualizar,
+      atualizado: false,
+      isUpgrade,
+      isDowngrade,
+      bloqueadoSazonalidade,
+      codRedeCorreto,
+      classificacaoAnterior: classificacaoAtual,
+      classificacaoNova: faixaCalculada
+    };
+  }
+
+  async _persistirClassificacao(base, avaliacao) {
+    if (!avaliacao.precisaAtualizar || avaliacao.bloqueadoSazonalidade) {
+      return avaliacao;
+    }
+
+    await this._atualizarClassificacao(
+      base.codcli,
+      avaliacao.codRedeCorreto,
+      avaliacao.classificacaoNova
+    );
+
+    base.classificacaoAtual = avaliacao.classificacaoNova;
+    base.classeCodigo = avaliacao.codRedeCorreto;
+    avaliacao.atualizado = true;
+
+    this.logger?.log?.(
+      `[Etapa 3/Atualizacao] Oracle atualizado: ${avaliacao.classificacaoAnterior} -> ${avaliacao.classificacaoNova} (Rede: ${avaliacao.codRedeCorreto})`
+    );
+
+    return avaliacao;
+  }
+
+  async _registrarUpgrade(base, avaliacao) {
+    if (!avaliacao.atualizado || !avaliacao.isUpgrade || !this.rotativoRepo) {
+      return;
+    }
+
+    await this.rotativoRepo.registrarUpgradeCliente({
+      codcli: base.codcli,
+      cliente: base.cliente,
+      classificacaoAnterior:
+        avaliacao.classificacaoAnterior || 'SEM_CLASSIFICACAO',
+      classificacaoNova: avaliacao.classificacaoNova
+    });
+  }
+
+  async _processarClassificacao(base, params) {
+    const avaliacao = this._avaliarClassificacao(base, params);
+    await this._persistirClassificacao(base, avaliacao);
+    await this._registrarUpgrade(base, avaliacao);
+    return avaliacao;
+  }
+
+  async _verificarProtecaoUpgrade(base, params) {
+    if (!this.rotativoRepo) {
+      return { bloqueado: false };
+    }
+
     const diasProtecao = params?.dias_protecao_upgrade || 60;
+    const protecaoAtiva = await this.rotativoRepo.consultarProtecaoAtiva(
+      base.codcli,
+      diasProtecao
+    );
 
-    // 1. Verifica proteção existente no Postgres (Upgrade recente) - Exceção 1
-    if (this.rotativoRepo) {
-      const protecaoAtiva = await this.rotativoRepo.consultarProtecaoAtiva(codcli, diasProtecao);
-      if (protecaoAtiva) {
-        const diasRestantes = Math.max(1, Math.ceil(Number(protecaoAtiva.dias_restantes || 0)));
-        
-        // USA PARÂMETRO DINÂMICO
-        const origemProtecao = String(protecaoAtiva.origem_protecao || 'UPGRADE').toUpperCase();
-        const motivo = origemProtecao === 'MANUAL'
-          ? `PROTECAO_MANUAL_ATIVA (Restam ${diasRestantes} dias)`
-          : `PROTECAO_UPGRADE_ATIVA (Restam ${diasRestantes} dias)`;
-        this.logger?.log?.(
-          `[Etapa 3/Protecao] Cliente ${codcli} com protecao ${origemProtecao} ativa. Restam ${diasRestantes} dias. Bloqueado.`
-        );
-        return {
-          bloqueado: true,
-          motivo
-        };
-      }
+    if (!protecaoAtiva) {
+      return { bloqueado: false };
     }
 
-    // 2. Lógica de Divergência (Detectar Novo Upgrade/Downgrade/Correção)
-    const codRedeCorreto = this._calcularCodRedePelaRegra(ramoAtividadeNome, faixaCalculada);
-    
-    // Níveis numéricos, agora robustos
-    const nivelNovo = this._getNivelFaixa(faixaCalculada);      
-    const nivelBanco = this._getNivelFaixa(classificacaoAtual); 
+    const diasRestantes = Math.max(
+      1,
+      Math.ceil(Number(protecaoAtiva.dias_restantes || 0))
+    );
+    const origemProtecao = String(
+      protecaoAtiva.origem_protecao || 'UPGRADE'
+    ).toUpperCase();
+    const motivo =
+      origemProtecao === 'MANUAL'
+        ? `PROTECAO_MANUAL_ATIVA (Restam ${diasRestantes} dias)`
+        : `PROTECAO_UPGRADE_ATIVA (Restam ${diasRestantes} dias)`;
 
-    // Verifica se precisa atualizar: 1) Nível mudou OU 2) O Código da Classe no banco está errado
-    const precisaAtualizarBanco = (nivelNovo !== nivelBanco) || (Number(classeCodigo) !== codRedeCorreto);
-    
-    if (precisaAtualizarBanco) {
-        this.logger?.log?.(`[Etapa 3/Divergência] Cli ${codcli}: Banco[${classificacaoAtual}/ID:${classeCodigo}] vs Real[${faixaCalculada}/ID:${codRedeCorreto}]`);
+    this.logger?.log?.(
+      `[Etapa 3/Protecao] Cliente ${base.codcli} com protecao ${origemProtecao} ativa. Restam ${diasRestantes} dias. Bloqueado.`
+    );
 
-        // EXCEÇÃO 3: Sazonalidade (Águas) - BLOQUEIA DOWNGRADE
-        const isDowngrade = nivelNovo < nivelBanco;
-        // USA PARÂMETROS DINÂMICOS
-        const isAguas = this._isTemporadaAguas(params?.meses_sazonalidade_inicio, params?.meses_sazonalidade_fim);
-
-        if (isDowngrade && isAguas) {
-            this.logger?.log?.(`[Etapa 3/Sazonalidade] 🌧️ Temporada de Águas: Downgrade BLOQUEADO (${classificacaoAtual} -> ${faixaCalculada}). Mantendo classificação atual.`);
-            // NÃO atualiza Oracle (Banco).
-            // Retorna FALSE para permitir que o fluxo de Longo Prazo continue (conforme regra "Remanejamento CONTINUA ATIVO").
-            return { bloqueado: false };
-        }
-
-        // Se não foi bloqueado pela Sazonalidade, prossegue com Update no Oracle
-        try {
-             if (this._atualizarClassificacao) {
-                 // ✅ FIX: Passando também o codRamoAtividade para atualizar o CODATV1 no WinThor
-                 await this._atualizarClassificacao(codcli, codRedeCorreto, faixaCalculada, base.codRamoAtividade); 
-                 this.logger?.log?.(`[Etapa 3/Atualização] Oracle ATUALIZADO com sucesso: ${classificacaoAtual} -> ${faixaCalculada} (Rede: ${codRedeCorreto}, Atv: ${base.codRamoAtividade})`);
-             } else {
-                 this.logger?.warn?.('[Etapa 3] Função atualizarClassificacaoCliente não disponível.');
-             }
-        } catch (err) {
-            this.logger?.error?.(`[Etapa 3] Erro ao atualizar classificação no Oracle: ${err.message}`);
-        }
-
-        // EXCEÇÃO 1: Se foi UPGRADE, registra e bloqueia remanejamento
-        if (nivelNovo > nivelBanco) {
-            // AÇÃO: Registrar o upgrade no Postgres
-            if (this.rotativoRepo) {
-                // 🚨 CORREÇÃO: Tratando NULL para evitar erro de constraint
-                const anteriorValido = classificacaoAtual || 'SEM_CLASSIFICACAO';
-                
-                await this.rotativoRepo.registrarUpgradeCliente({
-                    codcli, 
-                    cliente, 
-                    classificacaoAnterior: anteriorValido, 
-                    classificacaoNova: faixaCalculada,
-                });
-            }
-
-            this.logger?.log?.(`[Etapa 3/Exceção 1] UPGRADE Detectado (${classificacaoAtual} -> ${faixaCalculada}). **BLOQUEIO ATIVADO**.`);
-            
-            return { 
-                bloqueado: true, 
-                motivo: `PROTECAO_UPGRADE_RECENTE (${classificacaoAtual}->${faixaCalculada})` 
-            };
-        }
-        
-        // Downgrade ou Correção de código segue liberado
-        this.logger?.log?.(`[Etapa 3] Alteração (Correção/Downgrade Seca) realizada. Fluxo segue normal.`);
-    }
-
-    return { bloqueado: false };
+    return { bloqueado: true, motivo };
   }
 
   // ===================================================================
-  // ETAPA 3.2: EXCEÇÃO DE NEGOCIAÇÃO BITRIX
+  // ETAPA 3.2: EXCECAO DE NEGOCIACAO BITRIX
   // ===================================================================
   async _verificarExcecaoBitrix(base, params) {
     // Só verificamos se o cliente estiver indo para Longo Prazo ou Rotativa crítica
@@ -949,18 +1016,59 @@ async _getRegrasParametros() {
   // ===================================================================
   // ORQUESTRADOR PRINCIPAL
   // ===================================================================
-  async processarCliente({ competencia, CodFilial, ClienteCod, DataIni, DataFim }) {
+  async processarCliente({
+    competencia,
+    CodFilial,
+    ClienteCod,
+    DataIni,
+    DataFim,
+    policy
+  }) {
+    const executionPolicy =
+      policy ||
+      createExecutionPolicy({
+        ativo: true,
+        modo: EXECUTION_MODES.MOVIMENTACAO
+      });
     // 1. CARREGA PARÂMETROS DINÂMICOS 
     const params = await this._getRegrasParametros();
     // 1. ETAPA 1: Montar Base
     const base = await this.etapa1MontarBaseCliente({
       competencia, CodFilial, ClienteCod, DataIni, DataFim,
     });
+    base.modoExecucao = executionPolicy.mode;
+
+    const classificacao = await this._processarClassificacao(base, params);
+    const resultadoClassificacao = {
+      ...base,
+      modoExecucao: executionPolicy.mode,
+      classificacaoPersistida: classificacao.atualizado,
+      classificacaoBloqueadaPorSazonalidade:
+        classificacao.bloqueadoSazonalidade
+    };
+
+    if (!executionPolicy.canMoveWallet) {
+      if (this.rotativoRepo) {
+        await this.rotativoRepo.salvarDadosRelatorio(resultadoClassificacao);
+      }
+      return resultadoClassificacao;
+    }
 
     // 2. ETAPA 3 (VERIFICAÇÕES DE EXCEÇÃO)
     
     // 3.1 e 3.3 (Upgrade e Sazonalidade)
-    let statusExcecao = await this._verificarUpgradeEAtualizar(base, params);
+    let statusExcecao = await this._verificarProtecaoUpgrade(base, params);
+
+    if (
+      !statusExcecao.bloqueado &&
+      classificacao.atualizado &&
+      classificacao.isUpgrade
+    ) {
+      statusExcecao = {
+        bloqueado: true,
+        motivo: `PROTECAO_UPGRADE_RECENTE (${classificacao.classificacaoAnterior}->${classificacao.classificacaoNova})`
+      };
+    }
 
     // 3.2 Negociação Bitrix (Só verifica se não foi bloqueado pelo Upgrade)
     if (!statusExcecao.bloqueado) {
@@ -1111,7 +1219,20 @@ async _getRegrasParametros() {
    * @param {string|null} [params.competencia]
    * @param {boolean} [params.skipBitrixEtapa5=false] Se true, Etapa 5 roda sem chamar Bitrix.
    */
-  async processarTodosClientesElegiveis({ CodFilial, DataIni, DataFim, competencia, skipBitrixEtapa5 = false }) {
+  async processarTodosClientesElegiveis({
+    CodFilial,
+    DataIni,
+    DataFim,
+    competencia,
+    skipBitrixEtapa5 = false,
+    policy
+  }) {
+    const executionPolicy =
+      policy ||
+      createExecutionPolicy({
+        ativo: true,
+        modo: EXECUTION_MODES.MOVIMENTACAO
+      });
     const filiais = Array.isArray(CodFilial) ? CodFilial : [CodFilial];
 
     this.logger?.log?.('===================================================');
@@ -1181,7 +1302,8 @@ async _getRegrasParametros() {
           CodFilial: filiais,
           ClienteCod: codcli,
           DataIni,
-          DataFim
+          DataFim,
+          policy: executionPolicy
         });
       } catch (err) {
         this.logger?.error?.(
@@ -1193,10 +1315,21 @@ async _getRegrasParametros() {
     }
 
     this.logger?.log?.(
-      '[MovCarteira] Processamento em massa concluído. Agora executando Etapa 5 (redistribuição)...'
+      '[MovCarteira] Processamento em massa concluído.'
     );
 
     // 4) Etapa 5 – Redistribuição na carteira rotativa
+    if (!executionPolicy.canRunStage5) {
+      this.logger?.log?.(
+        '[MovCarteira] Etapa 5 ignorada pela politica de execucao.'
+      );
+      return;
+    }
+
+    this.logger?.log?.(
+      '[MovCarteira] Agora executando Etapa 5 (redistribuição)...'
+    );
+
     try {
       await this.executarEtapa5Redistribuicao({ skipBitrix: skipBitrixEtapa5 });
       this.logger?.log?.(
@@ -1218,8 +1351,9 @@ async _getRegrasParametros() {
 
 MovimentacaoCarteiraService.clearCache = function () {
   try {
-    if (typeof PerformanceClientes?.clearCache === 'function') {
-      PerformanceClientes.clearCache();
+    const PerformanceClientesClass = loadPerformanceClientes();
+    if (typeof PerformanceClientesClass?.clearCache === 'function') {
+      PerformanceClientesClass.clearCache();
     }
   } catch (err) {
     console.error('[MovCarteira] Erro ao limpar cache de PerformanceClientes:', err);
