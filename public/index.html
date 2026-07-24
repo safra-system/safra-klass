@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safra Klass — Scoring de Clientes</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="css/index.css?v=5.0">
+    <link rel="stylesheet" href="css/custom-datepicker.css?v=1.2">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    
+    <header class="main-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <img src="img/logo.png" alt="Logo Safra" class="logo-img">
+                <div class="logo-text">
+                    <h1>Safra<span class="brand-name">Klass</span><span class="brand-version">v3.1</span></h1>
+                    <p>Departamento Comercial &bull; Scoring de Clientes</p>
+                </div>
+            </div>
+
+            <div class="header-actions">
+
+                <span class="header-status">
+                    <span class="status-dot"></span>Online
+                </span>
+
+                <div class="h-divider"></div>
+
+                <a href="substituicao-carteira.html" id="btnSubstituicaoCarteira" class="btn-header" title="Substituição de Carteira">
+                    <i class="fas fa-exchange-alt"></i> <span>Substituição</span>
+                </a>
+
+                <a href="relatorio-gestores.html" id="btnPainelGestor" class="btn-header btn-header--accent" title="Painel do Gestor">
+                    <i class="fas fa-chart-line"></i> <span>Painel do Gestor</span>
+                </a>
+
+                <div class="h-divider"></div>
+
+                <button id="theme-toggle" class="btn-header btn-header--icon" title="Alternar Tema">
+                    <i class="fas fa-moon"></i>
+                </button>
+
+                <a href="/configuracoes" id="btnConfiguracoes" class="btn-header btn-header--icon" title="Configurações">
+                    <i class="fas fa-cog"></i>
+                </a>
+
+                <a href="/auth/logout" class="btn-header btn-header--exit" title="Sair do Sistema">
+                    <i class="fas fa-sign-out-alt"></i> <span>Sair</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <div class="card fade-in">
+            <div class="card-header-strip">
+                <div class="strip-icon"><i class="fas fa-search"></i></div>
+                <h2>Parâmetros da Consulta</h2>
+            </div>
+            
+            <div class="card-body">
+                <form id="searchForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="DataIni">Data Inicial:</label>
+                            <input type="date" id="DataIni" name="DataIni" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="DataFim">Data Final:</label>
+                            <input type="date" id="DataFim" name="DataFim" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label>Filiais:</label>
+                        <div class="filial-pills-container" id="filial-pills">
+                            <button type="button" class="filial-pill selected" data-value="1">Filial 1</button>
+                            <button type="button" class="filial-pill selected" data-value="3">Filial 3</button>
+                            <button type="button" class="filial-pill selected" data-value="5">Filial 5</button>
+                            <button type="button" class="filial-pill selected" data-value="6">Filial 6</button>
+                        </div>
+                    </div>
+
+                    <div class="form-grid" style="margin-top: 20px;">
+                        <div class="form-group">
+                            <label for="ClienteCod">Código do Cliente:</label>
+                            <input type="text" id="ClienteCod" name="ClienteCod" placeholder="9596">
+                        </div>
+                        <div class="form-group">
+                            <label for="ClienteNome">Nome Fantasia:</label>
+                            <input type="text" id="ClienteNome" name="ClienteNome" placeholder="Digite parte da fantasia">
+                        </div>
+                    </div>
+
+                    <!-- Botão Mais Filtros -->
+                    <div style="margin-top: 16px;">
+                        <button type="button" id="toggleFiltrosBtn" class="btn-mais-filtros">
+                            <i id="toggleFiltrosIcon" class="fas fa-sliders-h"></i>
+                            <span id="toggleFiltrosLabel">Mais Filtros</span>
+                        </button>
+                    </div>
+
+                    <!-- Painel de Filtros Extras (oculto por padrão) -->
+                    <div id="painelFiltrosExtras" style="display: none;">
+
+                        <!-- Município -->
+                        <div class="filtro-section">
+                            <label class="filtro-label" for="Municipio">Município:</label>
+                            <input type="text" id="Municipio" name="Municipio" placeholder="Ex: São Paulo">
+                        </div>
+
+                        <!-- CNPJ -->
+                        <div class="filtro-section">
+                            <label class="filtro-label" for="Cnpj">CNPJ:</label>
+                            <input type="text" id="Cnpj" name="Cnpj" placeholder="Ex: 12.345.678/0001-90">
+                            <small class="filtro-hint">Pode digitar com ou sem máscara</small>
+                        </div>
+
+                        <!-- Ramo de Atividade -->
+                        <div class="filtro-section">
+                            <label class="filtro-label">Ramo de Atividade:</label>
+
+                            <div class="ramo-grupo">
+                                <span class="ramo-categoria-label">
+                                    <i class="fas fa-industry"></i> Atacado
+                                </span>
+                                <div class="filial-pills-container" id="ramo-pills-atacado">
+                                    <button type="button" class="filial-pill ramo-pill" data-value="9">Atacado</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="10">Revenda</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="11">Serviços</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="12">Corporativo/Industrial</button>
+                                </div>
+                            </div>
+
+                            <div class="ramo-grupo">
+                                <span class="ramo-categoria-label">
+                                    <i class="fas fa-store"></i> Varejo
+                                </span>
+                                <div class="filial-pills-container" id="ramo-pills-varejo">
+                                    <button type="button" class="filial-pill ramo-pill" data-value="1">Comércio</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="2">Indústria</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="3">Prestador de Serviço</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="4">Produtor Rural</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="5">Pessoa Física</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="6">Outros</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="7">Fornecedores</button>
+                                    <button type="button" class="filial-pill ramo-pill" data-value="8">Filiais</button>
+                                </div>
+                            </div>
+
+                            <small class="filtro-hint">Nenhum selecionado = todos os ramos</small>
+                        </div>
+
+                        <!-- Classificação -->
+                        <div class="filtro-section">
+                            <label class="filtro-label">Classificação:</label>
+                            <div class="filial-pills-container" id="classificacao-pills">
+                                <button type="button" class="filial-pill classificacao-pill" data-value="BRONZE"   style="border-color:#D35400; color:#D35400;"><i class="fas fa-award"></i> Bronze</button>
+                                <button type="button" class="filial-pill classificacao-pill" data-value="PRATA"    style="border-color:#7F8C8D; color:#7F8C8D;"><i class="fas fa-medal"></i> Prata</button>
+                                <button type="button" class="filial-pill classificacao-pill" data-value="OURO"     style="border-color:#F39C12; color:#F39C12;"><i class="fas fa-star"></i> Ouro</button>
+                                <button type="button" class="filial-pill classificacao-pill" data-value="PLATINUM" style="border-color:#2C3E50; color:#2C3E50;"><i class="fas fa-gem"></i> Platinum</button>
+                                <button type="button" class="filial-pill classificacao-pill" data-value="DIAMANTE" style="border-color:#0984E3; color:#0984E3;"><i class="fas fa-crown"></i> Diamante</button>
+                            </div>
+                            <small class="filtro-hint">Nenhum selecionado = todas as classificações</small>
+                        </div>
+
+                    </div><!-- /painelFiltrosExtras -->
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Gerar Relatório
+                        </button>
+                        <button type="button" id="exportBtn" class="btn btn-secondary" disabled>
+                            <i class="fas fa-download"></i> Exportar Excel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="video-loading-container">
+                <video id="loadingVideo" class="loading-video" muted loop playsinline>
+                    <source src="videos/Criação_De_Animação_De_Carregamento.mp4" type="video/mp4">
+                </video>
+            </div>
+            <p>Processando dados...</p>
+        </div>
+
+        <div id="results" class="card fade-in hidden">
+            <div class="card-header-strip">
+                <div class="strip-icon"><i class="fas fa-file-alt"></i></div>
+                <h2>Resultados</h2>
+            </div>
+            
+            <div class="card-body">
+                <div id="summary"></div>
+                
+                <div class="table-responsive">
+                    <table id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Cidade</th>
+                                <th>Estado</th>
+                                <th>Ramo</th>
+                                <th style="text-align:center">Média Geral</th>
+                                <th style="text-align:center">Classificação</th>
+                                <th style="text-align:right">Ver Detalhes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="error" class="hidden" style="position:fixed; bottom:20px; right:20px; background:#fee2e2; padding:15px 25px; border-radius:8px; border-left:5px solid #ef4444; z-index:2000; box-shadow:0 5px 15px rgba(0,0,0,0.1);">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <i class="fas fa-exclamation-circle" style="color:#ef4444; font-size:1.2rem;"></i>
+                <span id="errorMessage" style="color:#991b1b; font-weight:600;"></span>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/auth-guard.js?v=2.0"></script>
+    <script src="js/app.js?v=5.0"></script>
+    <script src="js/custom-datepicker.js?v=1.2"></script>
+</body>
+</html>

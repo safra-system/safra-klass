@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safra Klass — Substituição de Carteira</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/safra-ds.css?v=3.3">
+    <link rel="stylesheet" href="css/substituicao-carteira.css?v=3.3">
+</head>
+<body>
+    <header class="main-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <img src="img/logo.png" alt="Logo Safra" class="logo-img">
+                <div class="logo-text">
+                    <h1>Safra<span class="brand-name">Klass</span><span class="brand-version">v3.1</span></h1>
+                    <p>Departamento Comercial &bull; Substituição de Carteira</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span class="header-status"><span class="status-dot"></span>Online</span>
+                <div class="h-divider"></div>
+                <button id="theme-toggle" class="btn-header" title="Alternar Tema"><i class="fas fa-moon"></i></button>
+                <a href="index.html" class="btn-header"><i class="fas fa-arrow-left"></i> Início</a>
+                <a href="/auth/logout" class="btn-header btn-header--exit"><i class="fas fa-sign-out-alt"></i> Sair</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- ═══ STEPPER ═══ -->
+        <div class="stepper" id="stepper">
+            <div class="stepper-step active" data-step="1">
+                <div class="stepper-circle"><i class="fas fa-user-tie"></i></div>
+                <span class="stepper-label">Vendedor</span>
+            </div>
+            <div class="stepper-line"></div>
+            <div class="stepper-step" data-step="2">
+                <div class="stepper-circle"><i class="fas fa-list-check"></i></div>
+                <span class="stepper-label">Seleção</span>
+            </div>
+            <div class="stepper-line"></div>
+            <div class="stepper-step" data-step="3">
+                <div class="stepper-circle"><i class="fas fa-chart-pie"></i></div>
+                <span class="stepper-label">Análise</span>
+            </div>
+            <div class="stepper-line"></div>
+            <div class="stepper-step" data-step="4">
+                <div class="stepper-circle"><i class="fas fa-check-circle"></i></div>
+                <span class="stepper-label">Concluído</span>
+            </div>
+        </div>
+
+        <!-- ═══ PASSO 1 — VENDEDOR ═══ -->
+        <div class="step-panel active" id="step1">
+            <div class="card fade-in">
+                <div class="card-header-strip">
+                    <div class="strip-icon"><i class="fas fa-user-tie"></i></div>
+                    <h2>Passo 1: Selecione o Vendedor (RCA)</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Vendedor:</label>
+                        <div class="custom-select-wrapper" id="rcaDropdownWrapper">
+                            <div class="custom-select-trigger" id="rcaDropdownTrigger">
+                                <span class="cs-selected-text" id="rcaSelectedText">
+                                    <i class="fas fa-spinner fa-spin cs-icon-loading"></i>
+                                    Carregando vendedores...
+                                </span>
+                                <i class="fas fa-chevron-down cs-arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown" id="rcaDropdown">
+                                <div class="cs-search-wrap">
+                                    <i class="fas fa-search cs-search-icon"></i>
+                                    <input type="text" class="cs-search" id="rcaSearch" placeholder="Buscar por nome ou código...">
+                                </div>
+                                <ul class="cs-list" id="rcaList"></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button id="btnCarregarCarteira" class="btn btn-primary btn-lg">
+                            <i class="fas fa-arrow-right"></i> Carregar Carteira
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ PASSO 2 — SELEÇÃO ═══ -->
+        <div class="step-panel" id="step2">
+            <div class="card fade-in">
+                <div class="card-header-strip">
+                    <div class="strip-icon"><i class="fas fa-list-check"></i></div>
+                    <h2>Passo 2: Selecione os Clientes para Remover</h2>
+                </div>
+                <div class="card-body">
+                    <!-- Contexto: qual RCA está sendo editado -->
+                    <div class="step-context" id="step2Context">
+                        <i class="fas fa-user-tie"></i>
+                        <span>Vendedor: <strong id="ctxRcaNome">—</strong></span>
+                        <span class="ctx-sep">|</span>
+                        <span>RCA: <strong id="ctxRcaCodigo">—</strong></span>
+                    </div>
+
+                    <div class="stats-bar">
+                        <div class="stat-item">
+                            <span class="stat-label">Total na Carteira:</span>
+                            <span class="stat-value" id="totalCarteira">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Selecionados:</span>
+                            <span class="stat-value text-danger" id="totalSelecionados">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Permanecerão:</span>
+                            <span class="stat-value text-success" id="totalPermanece">0</span>
+                        </div>
+                    </div>
+
+                    <div class="action-bar" style="flex-wrap: wrap;">
+                        <button id="btnSelecionarTodos" class="btn btn-outline">
+                            <i class="fas fa-check-double"></i> Selecionar Todos
+                        </button>
+                        <button id="btnLimparSelecao" class="btn btn-outline">
+                            <i class="fas fa-times"></i> Limpar Seleção
+                        </button>
+                        <div style="flex-grow: 1; min-width: 250px;">
+                            <input type="text" id="searchCliente" class="search-input" placeholder="Buscar cliente..." style="width: 100%;">
+                            <small class="search-hint">
+                                <i class="fas fa-info-circle"></i> Dica: Cole múltiplos códigos separados por espaço, vírgula ou Enter.
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="clients-table">
+                            <thead>
+                                <tr>
+                                    <th width="50"><input type="checkbox" id="checkAll"></th>
+                                    <th>Código</th>
+                                    <th>Cliente</th>
+                                    <th>Classificação</th>
+                                    <th>Dias s/ Compra</th>
+                                    <th>Última Compra</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clientesBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-actions">
+                        <button id="btnVoltarPasso1" class="btn btn-outline">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </button>
+                        <div class="form-actions-right">
+                            <button id="btnTransferirParaRca118" class="btn btn-danger btn-lg" disabled>
+                                <i class="fas fa-arrow-right"></i> Transferir para RCA 118
+                            </button>
+                            <button id="btnProcessarSubstituicao" class="btn btn-primary btn-lg" disabled>
+                                <i class="fas fa-exchange-alt"></i> Processar Substituição
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ PASSO 3 — ANÁLISE ═══ -->
+        <div class="step-panel" id="step3">
+            <div class="card fade-in">
+                <div class="card-header-strip">
+                    <div class="strip-icon"><i class="fas fa-chart-pie"></i></div>
+                    <h2>Passo 3: Análise de Compatibilidade</h2>
+                </div>
+                <div class="card-body">
+                    <!-- Contexto -->
+                    <div class="step-context" id="step3Context">
+                        <i class="fas fa-user-tie"></i>
+                        <span>RCA: <strong id="ctxRca3">—</strong></span>
+                        <span class="ctx-sep">|</span>
+                        <span><strong id="ctxQtdRemover">0</strong> clientes selecionados para remoção</span>
+                    </div>
+
+                    <div class="origin-badge">
+                        <i class="fas fa-database text-info"></i> 
+                        Os novos clientes serão buscados do <strong>RCA 118 (Inativos)</strong> ou clientes sem vendedor.
+                    </div>
+
+                    <div id="repescagemAviso" class="warning-box hidden">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 1.2rem; margin-top: 2px;"></i>
+                        <div>
+                            <strong>Atenção: Ajuste de Categorias (Repescagem)</strong>
+                            <p style="margin: 5px 0 0 0; font-size: 0.9rem;">
+                                Não foram encontrados clientes suficientes com a mesma classificação exata. 
+                                O sistema completou a lista automaticamente com as melhores opções disponíveis para evitar desfalque.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="analysis-grid">
+                        <div class="analysis-card">
+                            <h3><i class="fas fa-minus-circle text-danger"></i> Clientes a Remover</h3>
+                            <div id="distribuicaoRemover"></div>
+                        </div>
+                        <div class="analysis-card">
+                            <h3><i class="fas fa-plus-circle text-success"></i> Clientes Compatíveis Encontrados</h3>
+                            <div id="distribuicaoNovos"></div>
+                        </div>
+                    </div>
+
+                    <div class="preview-section">
+                        <h3>Novos Clientes Sugeridos</h3>
+                        <div class="table-responsive">
+                            <table class="clients-table">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Cliente</th>
+                                        <th>Classificação</th>
+                                        <th>Cidade</th>
+                                        <th>Última Compra</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="novosClientesBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button id="btnVoltar" class="btn btn-outline">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </button>
+                        <button id="btnConfirmarSubstituicao" class="btn btn-success btn-lg">
+                            <i class="fas fa-check"></i> Confirmar Substituição
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ PASSO 4 — CONCLUÍDO ═══ -->
+        <div class="step-panel" id="step4">
+            <div class="card fade-in">
+                <div class="card-header-strip success">
+                    <div class="strip-icon"><i class="fas fa-check-circle"></i></div>
+                    <h2>Substituição Concluída!</h2>
+                </div>
+                <div class="card-body text-center">
+                    <div class="success-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h3>Operação realizada com sucesso</h3>
+                    <div id="resultadoSumario"></div>
+                    <div class="form-actions form-actions-center">
+                        <button id="btnNovaSubstituicao" class="btn btn-primary">
+                            <i class="fas fa-redo"></i> Nova Substituição
+                        </button>
+                        <a href="relatorio-gestores.html" class="btn btn-outline">
+                            <i class="fas fa-chart-line"></i> Ver Relatório Gerencial
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAIS (inalterados) -->
+        <div id="modalErro" class="modal-overlay hidden">
+            <div class="modal-box">
+                <div class="modal-icon-band">
+                    <div class="modal-icon-circle danger"><i class="fas fa-times-circle"></i></div>
+                </div>
+                <div class="modal-content">
+                    <h3 id="modalErroTitulo">Atenção</h3>
+                    <p id="modalErroMensagem"></p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-modal-ok" id="modalErroBtnOk">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modalConfirm" class="modal-overlay hidden">
+            <div class="modal-box">
+                <div class="modal-icon-band">
+                    <div class="modal-icon-circle warning" id="modalConfirmIcone">
+                        <i id="modalConfirmIconeI" class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+                <div class="modal-content">
+                    <h3 id="modalConfirmTitulo"></h3>
+                    <p id="modalConfirmMensagem"></p>
+                    <div class="modal-detail hidden" id="modalConfirmDetalhe"></div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-modal-cancel" id="modalConfirmBtnCancelar">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button class="btn btn-modal-confirm-warning" id="modalConfirmBtnOk">
+                        <i class="fas fa-check"></i> Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading-overlay hidden">
+            <div class="spinner"></div>
+            <p id="loadingMessage">Processando...</p>
+        </div>
+    </div>
+
+    <script src="js/auth-guard.js?v=2.0"></script>
+    <script src="js/substituicao-carteira.js?v=3.3"></script>
+</body>
+</html>

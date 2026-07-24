@@ -1,0 +1,807 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safra Klass — Painel Gerencial</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/safra-ds.css?v=3.3">
+    <link rel="stylesheet" href="css/relatorio-gestores.css?v=4.8">
+    <link rel="stylesheet" href="css/custom-datepicker.css?v=1.2">
+    <style>
+        /* 🆕 Botão PDF nos cards de RCA */
+        .crca-actions { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end; }
+        .btn-pdf-carteira {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 12px; font-size: .72rem; font-weight: 600;
+            border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+            background: var(--surface-2); color: var(--text-secondary);
+            cursor: pointer; transition: all .2s;
+        }
+        .btn-pdf-carteira:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+        .btn-pdf-carteira:disabled { opacity: .5; cursor: wait; }
+        .btn-pdf-carteira i { font-size: .78rem; }
+        body.dark .btn-pdf-carteira { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.1); }
+        body.dark .btn-pdf-carteira:hover { background: #c0392b; color: #fff; }
+        /* Botão global de PDFs */
+        .btn-pdf-todos {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 8px 18px; font-size: .82rem; font-weight: 600;
+            border: none; border-radius: var(--radius-md);
+            background: #c0392b; color: #fff;
+            cursor: pointer; transition: all .2s;
+        }
+        .btn-pdf-todos:hover { background: #a93226; }
+        .btn-pdf-todos:disabled { opacity: .5; cursor: wait; }
+    </style>
+</head>
+<body>
+
+    <header class="main-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <img src="img/logo.png" alt="Logo Safra" class="logo-img">
+                <div class="logo-text">
+                    <h1>Safra<span class="brand-name">Klass</span><span class="brand-version">v3.1</span></h1>
+                    <p>Departamento Comercial &bull; Painel Gerencial de Carteira</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span class="header-status"><span class="status-dot"></span>Online</span>
+                <div class="h-divider"></div>
+                <button id="btnExportExcel" class="btn-header btn-excel"><i class="fas fa-file-excel"></i> Excel</button>
+                <div class="h-divider"></div>
+                <button id="theme-toggle" class="btn-header" title="Alternar Tema"><i class="fas fa-moon"></i></button>
+                <a href="index.html" class="btn-header"><i class="fas fa-arrow-left"></i> Início</a>
+                <a href="/auth/logout" class="btn-header btn-header--exit"><i class="fas fa-sign-out-alt"></i> Sair</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <div id="loader" class="loading">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p>Carregando dados gerenciais...</p>
+        </div>
+
+        <div id="mainContent" class="card" style="display: none;">
+
+            <div class="painel-banner">
+                <div class="painel-banner-icon"><i class="fas fa-layer-group"></i></div>
+                <div class="painel-banner-body">
+                    <h2>Painel Gerencial de Carteira</h2>
+                    <p>
+                        Visão consolidada de todas as carteiras. Acompanhe ocupação por vendedor,
+                        movimentações automáticas, reclassificações de nível, proteções de upgrade,
+                        bloqueios por negociação Bitrix, substituições manuais e a
+                        <b>comparação em tempo real entre o que o sistema processou e o estado atual do WinThor</b>.
+                    </p>
+                </div>
+                <div class="painel-banner-meta">
+                    <span class="meta-pill"><i class="fas fa-database"></i> Oracle + PostgreSQL</span>
+                    <span class="meta-pill"><i class="fas fa-calendar-alt"></i> Ciclo mensal — dia 1</span>
+                    <span class="meta-pill" id="dataAtual"><i class="fas fa-clock"></i> —</span>
+                </div>
+            </div>
+
+            <!-- Abas -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="openTab('tab1')"><i class="fas fa-chart-pie"></i> Visão Geral <span class="tab-badge" id="badge-tab1">—</span></button>
+                <button class="tab-btn" onclick="openTab('tab2')"><i class="fas fa-exchange-alt"></i> Movimentações <span class="tab-badge" id="badge-tab2">—</span></button>
+                <button class="tab-btn" onclick="openTab('tab3')"><i class="fas fa-history"></i> Longo Prazo <span class="tab-badge" id="badge-tab3">—</span></button>
+                <button class="tab-btn" onclick="openTab('tab4')"><i class="fas fa-level-up-alt"></i> Reclassificações <span class="tab-badge" id="badge-tab4">—</span></button>
+                <button class="tab-btn" onclick="openTab('tab5')"><i class="fas fa-shield-alt"></i> Proteções <span class="tab-badge" id="badge-tab5">—</span></button>
+                <button class="tab-btn" onclick="openTab('tab6')"><i class="fas fa-lock"></i> Bitrix <span class="tab-badge" id="badge-tab6">—</span></button>
+                <button class="tab-btn" onclick="openTab('tab7')"><i class="fas fa-tachometer-alt"></i> Performance</button>
+                <button class="tab-btn" onclick="openTab('tab8')"><i class="fas fa-random"></i> Substituições <span class="tab-badge" id="badge-tab8">—</span></button>
+                <button class="tab-btn" onclick="abrirComparacao()">
+                    <i class="fas fa-code-branch"></i> Sistema vs WinThor
+                    <span class="tab-badge" id="badge-tab9">NOVO</span>
+                </button>
+                <button class="tab-btn" onclick="openTab('tab10')">
+                    <i class="fas fa-clipboard-list"></i> Logs Correção Cadastro
+                    <span class="tab-badge" id="badge-tab10">—</span>
+                </button>
+            </div>
+
+            <!-- ═══ TAB 1 — VISÃO GERAL ══════════════════════════════ -->
+            <div id="tab1" class="tab-content active">
+                <div class="tab-title-area">
+                    <h3>Visão Geral por Vendedor</h3>
+                    <p class="tab-desc">
+                        Esta tela mostra a carteira <b>atual do WinThor</b> por vendedor.
+                        Você vê total de clientes, ocupação da carteira e faixa de inatividade.
+                        <b>Clique em uma linha</b> para abrir os clientes daquele RCA.
+                    </p>
+                </div>
+                <div class="status-legenda">
+                    <span class="legenda-item"><span class="l-dot l-verde"></span><b>Ativo</b> - ate 30 dias sem compra</span>
+                    <span class="legenda-item"><span class="l-dot l-amarelo"></span><b>Alerta</b> - de 31 a 60 dias sem compra</span>
+                    <span class="legenda-item"><span class="l-dot l-vermelho"></span><b>Risco</b> - acima de 60 dias sem compra</span>
+                </div>
+                <div class="info-callout ic-blue">
+                    <i class="fas fa-info-circle"></i>
+                    <p><b>Como ler esta tabela:</b> o limite de referência é <b>250 clientes por carteira</b>. Esta aba é somente visualização e reflete o que está gravado no WinThor neste momento.</p>
+                </div>
+
+                <!-- Filtro Tab 1 -->
+                <div class="filter-bar">
+                    <div class="sf-input-wrap sf-input-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="filtroTab1" placeholder="Buscar por RCA ou nome do vendedor..." oninput="filtrarTab1()">
+                    </div>
+                    <span class="filter-counter" id="counterTab1"></span>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="tableVisaoGeral">
+                        <thead><tr>
+                            <th data-tip="Código do vendedor no WinThor (CODUSUR)">RCA <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Nome do vendedor">Vendedor <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Clientes ativos / Capacidade máxima de 250">Total / Limite <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Percentual da carteira ocupada">Ocupação <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Compraram nos últimos 30 dias">Ativos <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Entre 30 e 60 dias sem compra">Alertas <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Mais de 60 dias sem compra — candidatos à rotativa">Risco <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 2 — MOVIMENTAÇÕES ════════════════════════════ -->
+            <div id="tab2" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>Movimentações dos Últimos 60 Dias</h3>
+                    <p class="tab-desc">Histórico de todos os remanejamentos de clientes entre carteiras, automáticos e manuais.</p>
+                </div>
+                <div class="status-legenda">
+                    <span class="legenda-item"><span class="l-dot l-azul"></span><b>ETAPA_5_DISTRIBUICAO</b> — redistribuição automática</span>
+                    <span class="legenda-item"><span class="l-dot l-vermelho"></span><b>MOV_CART_GRUPO2</b> — envio para Longo Prazo</span>
+                    <span class="legenda-item"><span class="l-dot l-amarelo"></span><b>SUBSTITUICAO_MANUAL</b> — operação de gestor</span>
+                    <span class="legenda-item"><span class="l-dot l-cinza"></span><b>ETAPA_5_SOBRA_COTA</b> — sem vagas, enviado ao 118</span>
+                </div>
+                <div class="info-callout ic-blue">
+                    <i class="fas fa-info-circle"></i>
+                    <p><b>Limiares de inatividade:</b> <b>60 dias</b> para Ouro/Prata/Bronze e <b>45 dias</b> para Diamante/Platinum. Ao ultrapassar, o cliente entra na fila rotativa e é redistribuído se houver vaga; caso contrário, vai para o RCA 118.</p>
+                </div>
+
+                <!-- Filtro Tab 2 -->
+                <div class="filter-bar">
+                    <div class="sf-input-wrap sf-input-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="filtroTab2" placeholder="Buscar nome ou codigos (virgula, espaco, quebra de linha)..." oninput="filtrarTab2()">
+                    </div>
+                    <div class="sf-select-wrap comp-select-wrap" data-comp-custom-select="filtroOrigemTab2">
+                        <i class="fas fa-filter"></i>
+                        <select id="filtroOrigemTab2" onchange="filtrarTab2()">
+                            <option value="">Todas as origens</option>
+                            <option value="ETAPA_5_DISTRIBUICAO">Distribuição Automática</option>
+                            <option value="MOV_CART_GRUPO2">Envio Longo Prazo</option>
+                            <option value="SUBSTITUICAO_MANUAL">Substituição Manual</option>
+                            <option value="ETAPA_5_SOBRA_COTA">Sobra de Cota</option>
+                        </select>
+                        <i class="fas fa-chevron-down sf-select-arrow"></i>
+                    </div>
+                    <span class="filter-counter" id="counterTab2"></span>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="tableMovimentacoes">
+                        <thead><tr>
+                            <th data-tip="Data do registro da movimentação">Data <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Cliente <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="RCA de onde o cliente saiu">RCA Origem <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="RCA que recebeu o cliente">RCA Destino <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Processo que gerou esta movimentação">Origem / Processo <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Dias sem compra no momento do remanejamento">Dias s/ Compra <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="comp-pag tab-pag">
+                    <span id="tab2PagInfo">—</span>
+                    <button id="tab2BtnAnterior" onclick="mudaPaginaTab('tab2', -1)" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+                    <button id="tab2BtnProximo" onclick="mudaPaginaTab('tab2', 1)" disabled>Próximo <i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 3 — LONGO PRAZO ══════════════════════════════ -->
+            <div id="tab3" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>Carteira de Longo Prazo — RCA 118</h3>
+                    <p class="tab-desc">Clientes enviados para recuperação por inatividade prolongada ou ausência de vagas na rotativa.</p>
+                </div>
+                <div class="info-callout ic-amber">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p><b>O que é o RCA 118?</b> É a carteira de recuperação. Um cliente chega aqui quando está com <b>mais de 90 dias sem comprar</b> e não havia vagas para redistribuição. O time de Longo Prazo realiza ações de reativação nessa base.</p>
+                </div>
+
+                <!-- Filtro Tab 3 -->
+                <div class="filter-bar">
+                    <div class="sf-input-wrap sf-input-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="filtroTab3" placeholder="Buscar por código ou nome do cliente..." oninput="filtrarTab3()">
+                    </div>
+                    <span class="filter-counter" id="counterTab3"></span>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="tableLongoPrazo">
+                        <thead><tr>
+                            <th>Cliente <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Vendedor anterior ao envio ao 118">RCA Anterior <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Data Envio ao 118 <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Dias s/ Compra <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Último Faturamento <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="comp-pag tab-pag">
+                    <span id="tab3PagInfo">—</span>
+                    <button id="tab3BtnAnterior" onclick="mudaPaginaTab('tab3', -1)" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+                    <button id="tab3BtnProximo" onclick="mudaPaginaTab('tab3', 1)" disabled>Próximo <i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 4 — RECLASSIFICAÇÕES ════════════════════════ -->
+            <div id="tab4" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>Histórico de Reclassificações de Nível</h3>
+                    <p class="tab-desc">Upgrades de nível detectados e aplicados automaticamente nos últimos 90 dias.</p>
+                </div>
+                <div class="secao-sep">Tabela de Níveis e Pontuação</div>
+                <div class="niveis-grid">
+                    <div class="nivel-chip nc-diamante"><strong>Diamante</strong><span>Nota ≥ 9,0</span><small>Máxima performance</small></div>
+                    <div class="nivel-chip nc-platinum"><strong>Platinum</strong><span>Nota 8,0–8,9</span><small>Alta performance</small></div>
+                    <div class="nivel-chip nc-ouro"><strong>Ouro</strong><span>Nota 7,0–7,9</span><small>Boa performance</small></div>
+                    <div class="nivel-chip nc-prata"><strong>Prata</strong><span>Nota 6,0–6,9</span><small>Regular</small></div>
+                    <div class="nivel-chip nc-bronze"><strong>Bronze</strong><span>Nota &lt; 6,0</span><small>Performance baixa</small></div>
+                </div>
+                <div class="info-callout ic-purple">
+                    <i class="fas fa-info-circle"></i>
+                    <p><b>Cálculo da nota:</b> média ponderada dos <b>6 meses fechados</b> mais recentes, calculada somente sobre os meses com compra. Ao detectar um upgrade, o sistema atualiza CODREDE e CATEGORIA no Oracle (WinThor) e registra uma proteção de 60 dias.</p>
+                </div>
+
+                <!-- Filtro Tab 4 -->
+                <div class="filter-bar">
+                    <div class="sf-input-wrap sf-input-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="filtroTab4" placeholder="Buscar por código ou nome do cliente..." oninput="filtrarTab4()">
+                    </div>
+                    <span class="filter-counter" id="counterTab4"></span>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="tableReclassificacao">
+                        <thead><tr>
+                            <th>Data <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Cliente <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Nível antes da reclassificação">Nível Anterior <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Novo nível calculado">Novo Nível <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Tipo <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="comp-pag tab-pag">
+                    <span id="tab4PagInfo">—</span>
+                    <button id="tab4BtnAnterior" onclick="mudaPaginaTab('tab4', -1)" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+                    <button id="tab4BtnProximo" onclick="mudaPaginaTab('tab4', 1)" disabled>Próximo <i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 5 — PROTEÇÕES ═════════════════════════════════ -->
+            <div id="tab5" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>Proteções de Upgrade Ativas</h3>
+                    <p class="tab-desc">Clientes em período de proteção de 60 dias após upgrade — o sistema bloqueia qualquer remanejamento durante esse período.</p>
+                </div>
+                <div class="info-callout ic-emerald">
+                    <i class="fas fa-shield-alt"></i>
+                    <p><b>Por que existe a proteção?</b> O vendedor que criou o vínculo que resultou no upgrade merece 60 dias para consolidá-lo. Ao expirar, o cliente retorna ao fluxo normal de avaliação mensal.</p>
+                </div>
+
+                <form id="manualProtecaoForm" class="filter-bar protecao-manual-bar">
+                    <div class="sf-input-wrap">
+                        <i class="fas fa-hashtag"></i>
+                        <input type="number" id="manualProtecaoCodcli" min="1" step="1" placeholder="Código do cliente" required>
+                    </div>
+                    <div class="sf-input-wrap">
+                        <i class="fas fa-calendar-day"></i>
+                        <input type="number" id="manualProtecaoDias" min="1" step="1" placeholder="Dias de proteção" required>
+                    </div>
+                    <button type="submit" id="btnSalvarProtecaoManual" class="protecao-manual-btn">
+                        <i class="fas fa-plus-circle"></i>
+                        Gravar proteção manual
+                    </button>
+                    <span id="manualProtecaoStatus" class="protecao-manual-status" aria-live="polite"></span>
+                </form>
+
+                <!-- Filtro Tab 5 -->
+                <div class="filter-bar">
+                    <div class="sf-input-wrap sf-input-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="filtroTab5" placeholder="Buscar por código ou nome do cliente..." oninput="filtrarTab5()">
+                    </div>
+                    <span class="filter-counter" id="counterTab5"></span>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="tableProtecoes">
+                        <thead><tr>
+                            <th>Cliente <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Nível atual — o nível protegido">Nível Protegido <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Data do Upgrade <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Upgrade + 60 dias">Proteção Válida Até <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Após zerar, volta ao fluxo normal">Dias Restantes <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="comp-pag tab-pag">
+                    <span id="tab5PagInfo">—</span>
+                    <button id="tab5BtnAnterior" onclick="mudaPaginaTab('tab5', -1)" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+                    <button id="tab5BtnProximo" onclick="mudaPaginaTab('tab5', 1)" disabled>Próximo <i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 6 — BITRIX ════════════════════════════════════ -->
+            <div id="tab6" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>Bloqueios por Negociação Ativa no Bitrix</h3>
+                    <p class="tab-desc">Clientes que não foram remanejados por possuírem negociação em andamento no Bitrix24 CRM — o sistema consulta em tempo real antes de qualquer movimentação.</p>
+                </div>
+                <div class="status-legenda">
+                    <span class="legenda-item"><span class="l-dot l-amarelo"></span><b>C1:NEW / EM_NEGOCIACAO / COBRADO_ORCAMENTO</b></span>
+                    <span class="legenda-item"><span class="l-dot l-vermelho"></span><b>UC_L7NUC2 / C4:FINAL_INVOICE</b></span>
+                </div>
+                <div class="info-callout ic-amber">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p><b>Duração do bloqueio:</b> válido até o último dia do mês seguinte à detecção. As fases de bloqueio são configuráveis na tela de Parâmetros do Sistema.</p>
+                </div>
+
+                <!-- Filtro Tab 6 -->
+                <div class="filter-bar">
+                    <div class="sf-input-wrap sf-input-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="filtroTab6" placeholder="Buscar por RCA, código ou nome do cliente..." oninput="filtrarTab6()">
+                    </div>
+                    <span class="filter-counter" id="counterTab6"></span>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="tableBitrix">
+                        <thead><tr>
+                            <th>RCA <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Cliente <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="ID do deal e fase do funil que bloqueou">Motivo do Bloqueio <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Dias s/ Compra <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="comp-pag tab-pag">
+                    <span id="tab6PagInfo">—</span>
+                    <button id="tab6BtnAnterior" onclick="mudaPaginaTab('tab6', -1)" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+                    <button id="tab6BtnProximo" onclick="mudaPaginaTab('tab6', 1)" disabled>Próximo <i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 7 — PERFORMANCE ══════════════════════════════ -->
+            <div id="tab7" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>KPIs Consolidados da Operação</h3>
+                    <p class="tab-desc">Indicadores-chave para leitura rápida da saúde geral das carteiras sem necessidade de navegar aba por aba.</p>
+                </div>
+                <div class="info-callout ic-blue">
+                    <i class="fas fa-chart-line"></i>
+                    <p><b>Taxa de Ocupação Global</b> acima de 95% = pouca margem para redistribuição. <b>Clientes em Risco</b> abaixo de 100 = saudável. <b>Upgrades</b> = crescimento qualitativo da base.</p>
+                </div>
+                <div class="table-responsive">
+                    <table id="tablePerformance">
+                        <thead><tr>
+                            <th>Métrica <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Valor Atual <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Meta / Referência <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Status <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 8 — SUBSTITUIÇÕES ════════════════════════════ -->
+            <div id="tab8" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>Histórico de Substituições de Carteira</h3>
+                    <p class="tab-desc">Operações <b>manuais</b> realizadas por gestores via ferramenta de Substituição — fora do ciclo automático.</p>
+                </div>
+                <div class="info-callout ic-blue">
+                    <i class="fas fa-info-circle"></i>
+                    <p>Substituições manuais impactam a carteira <b>imediatamente</b>, sem aguardar o ciclo mensal. As automáticas aparecem na aba <em>Movimentações</em>.</p>
+                </div>
+                <div class="status-legenda">
+                    <span class="legenda-item"><span class="l-dot l-verde"></span><b>Adição</b> — cliente entrou na carteira</span>
+                    <span class="legenda-item"><span class="l-dot l-vermelho"></span><b>Para 118</b> — enviado para Longo Prazo</span>
+                    <span class="legenda-item"><span class="l-dot l-azul"></span><b>Substituição</b> — troca direta</span>
+                </div>
+
+                <!-- Filtros Tab 8 -->
+                <div class="filter-bar">
+                    <div class="sf-input-wrap sf-input-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="filtroSubstituicao" placeholder="Buscar cliente ou código...">
+                    </div>
+                    <div class="sf-date-range">
+                        <div class="sf-input-wrap sf-input-date">
+                            <i class="fas fa-calendar-alt"></i>
+                            <input type="date" id="filtroDataInicioSub" title="Data Inicial">
+                        </div>
+                        <span class="sf-date-sep">até</span>
+                        <div class="sf-input-wrap sf-input-date">
+                            <i class="fas fa-calendar-alt"></i>
+                            <input type="date" id="filtroDataFimSub" title="Data Final">
+                        </div>
+                    </div>
+                    <div class="sf-select-wrap comp-select-wrap" data-comp-custom-select="filtroTipoSub">
+                        <i class="fas fa-filter"></i>
+                        <select id="filtroTipoSub">
+                            <option value="">Todos os tipos</option>
+                            <option value="SUBSTITUICAO_MANUAL">Substituição Manual</option>
+                            <option value="118">Enviados ao RCA 118</option>
+                        </select>
+                        <i class="fas fa-chevron-down sf-select-arrow"></i>
+                    </div>
+                    <span class="filter-counter" id="subCount"></span>
+                </div>
+
+                <div class="sub-resumo" id="subResumo"></div>
+                <div class="table-responsive">
+                    <table id="tableSubstituicoes">
+                        <thead><tr>
+                            <th>Data <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Código WinThor">Código <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Cliente <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Vendedor de onde o cliente saiu">RCA Origem <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th data-tip="Vendedor que recebeu o cliente">RCA Destino <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Tipo <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            <th>Dias s/ Compra <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                        </tr></thead>
+                        <tbody id="tbodySubstituicoes"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 9 — SISTEMA vs WINTHOR ══════════════════════ -->
+            <div id="tab9" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>Comparação: Sistema (Cron) vs WinThor (Atual)</h3>
+                    <p class="tab-desc">
+                        Confronta o <b>último snapshot registrado pelo cron</b> (armazenado no PostgreSQL)
+                        com o <b>estado atual das carteiras no WinThor</b> (Oracle — PCCLIENT.CODUSUR1).
+                        Permite identificar o que <b>permaneceu</b>, o que foi <b>movido</b> após o processamento,
+                        clientes <b>novos</b> que ainda não passaram pelo cron e clientes <b>removidos</b> do Oracle.
+                    </p>
+                </div>
+
+                <div id="compLoader" class="comp-loader">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Buscando e comparando dados entre os dois sistemas...
+                </div>
+
+                <div id="compConteudo" style="display:none;">
+
+                    <div class="comp-header-bar">
+                        <div class="snapshot-info">
+                            <span><i class="fas fa-database"></i> PostgreSQL (cron): <b id="compTotalSistema">—</b> clientes registrados</span>
+                            <span><i class="fas fa-server"></i> WinThor (atual): <b id="compTotalWinthor">—</b> clientes ativos</span>
+                            <span><i class="fas fa-calendar-check"></i> Último processamento: <b id="compDataSnapshot">—</b></span>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <button id="btnPdfTodos" onclick="baixarTodosPdfsWinthor()" class="btn-pdf-todos" title="Gerar PDF de todos os vendedores">
+                                <i class="fas fa-file-pdf"></i> Baixar Todos os PDFs
+                            </button>
+                            <button onclick="recarregarComparacao()" class="sf-btn-icon" title="Recarregar dados">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="comp-totais">
+                        <div class="comp-card cc-total">
+                            <div class="comp-card-label">Total Comparado</div>
+                            <div class="comp-card-num" id="cTotal">—</div>
+                            <div class="comp-card-sub">clientes em ambos os sistemas</div>
+                        </div>
+                        <div class="comp-card cc-perm">
+                            <div class="comp-card-label"><i class="fas fa-check-circle"></i> Permaneceu</div>
+                            <div class="comp-card-num" id="cPerm">—</div>
+                            <div class="comp-card-sub">mesmo RCA nos dois lados</div>
+                        </div>
+                        <div class="comp-card cc-movido">
+                            <div class="comp-card-label"><i class="fas fa-arrows-alt-h"></i> Movido</div>
+                            <div class="comp-card-num" id="cMovido">—</div>
+                            <div class="comp-card-sub">mudou de RCA após o cron</div>
+                        </div>
+                        <div class="comp-card cc-novo">
+                            <div class="comp-card-label"><i class="fas fa-plus-circle"></i> Novo</div>
+                            <div class="comp-card-num" id="cNovo">—</div>
+                            <div class="comp-card-sub">no WinThor, fora do escopo do cron</div>
+                        </div>
+                        <div class="comp-card cc-removido">
+                            <div class="comp-card-label"><i class="fas fa-minus-circle"></i> Removido</div>
+                            <div class="comp-card-num" id="cRemovido">—</div>
+                            <div class="comp-card-sub">estava no cron, sumiu do Oracle</div>
+                        </div>
+                    </div>
+
+                    <div class="info-callout ic-blue">
+                        <i class="fas fa-clipboard-list"></i>
+                        <p>
+                            Os logs da procedure de correção agora ficam na aba dedicada
+                            <b>Logs Correção Cadastro</b>, para separar a visualização da comparação principal.
+                        </p>
+                    </div>
+
+                    <div class="info-callout ic-purple">
+                        <i class="fas fa-info-circle"></i>
+                        <p>
+                            <b>Como interpretar:</b>
+                            <b style="color:var(--emerald)">Permaneceu</b> = mesmo RCA nos dois sistemas — tudo consistente.
+                            <b style="color:var(--amber)">Movido</b> = RCA mudou após o cron — operação manual ou redistribuição.
+                            <b style="color:var(--safra-primary-light)">Novo</b> = existe no WinThor mas não passou pelo cron.
+                            <b style="color:var(--rose)">Removido</b> = estava no cron mas sumiu do WinThor.
+                        </p>
+                    </div>
+
+                    <div class="secao-sep">Visão por Vendedor — clique para filtrar</div>
+                    <div class="comp-rca-panel">
+                        <div class="comp-rca-toolbar">
+                            <div class="comp-rca-toolbar-copy">
+                                <div class="comp-rca-toolbar-title">
+                                    <i class="fas fa-users"></i>
+                                    Filtro por vendedor
+                                </div>
+                                <div id="compRcaToolbarMeta" class="comp-rca-toolbar-meta">Carregando vendedores...</div>
+                            </div>
+                            <div class="comp-rca-toolbar-actions">
+                                <div class="comp-rca-search">
+                                    <i class="fas fa-search"></i>
+                                    <input
+                                        type="text"
+                                        id="compRcaBusca"
+                                        placeholder="Buscar vendedor ou RCA..."
+                                        oninput="filtrarRcaCardsView()"
+                                    >
+                                </div>
+                                <button
+                                    type="button"
+                                    id="compRcaBtnDivergencia"
+                                    class="comp-rca-tool-btn"
+                                    onclick="toggleCompRcaSomenteDivergencia()"
+                                    title="Mostrar apenas vendedores com diferença"
+                                >
+                                    <i class="fas fa-filter"></i> Só divergência
+                                </button>
+                                <button
+                                    type="button"
+                                    class="comp-rca-tool-btn ghost"
+                                    onclick="limparRcaCardsView()"
+                                    title="Limpar busca da visão por vendedor"
+                                >
+                                    <i class="fas fa-eraser"></i> Limpar vista
+                                </button>
+                            </div>
+                        </div>
+                        <div id="compRcaGrid" class="comp-rca-grid"></div>
+                    </div>
+
+                    <div class="secao-sep">Tabela Detalhada</div>
+
+                    <!-- Filtros Tab 9 -->
+                    <div class="filter-bar comp-filter-bar">
+                        <div class="sf-input-wrap sf-input-search">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="compFiltroTexto" placeholder="Buscar por código ou nome do cliente..." oninput="filtrarTabComp()">
+                        </div>
+                        <div class="sf-select-wrap comp-select-wrap" data-comp-custom-select="compFiltroSituacao">
+                            <i class="fas fa-flag"></i>
+                            <select id="compFiltroSituacao" onchange="filtrarTabComp()">
+                                <option value="">Todas as situações</option>
+                                <option value="PERMANECEU">Permaneceu</option>
+                                <option value="MOVIDO">Movido</option>
+                                <option value="NOVO">Novo</option>
+                                <option value="REMOVIDO">Removido</option>
+                            </select>
+                            <i class="fas fa-chevron-down sf-select-arrow"></i>
+                        </div>
+                        <div class="sf-select-wrap comp-select-wrap" data-comp-custom-select="compFiltroRca">
+                            <i class="fas fa-user-tie"></i>
+                            <select id="compFiltroRca" onchange="filtrarTabComp()">
+                                <option value="">Todos os RCAs</option>
+                            </select>
+                            <i class="fas fa-chevron-down sf-select-arrow"></i>
+                        </div>
+                        <div class="sf-select-wrap comp-select-wrap" data-comp-custom-select="compFiltroNivel">
+                            <i class="fas fa-medal"></i>
+                            <select id="compFiltroNivel" onchange="filtrarTabComp()">
+                                <option value="">Todos os níveis</option>
+                                <option value="DIAMANTE">Diamante</option>
+                                <option value="PLATINUM">Platinum</option>
+                                <option value="OURO">Ouro</option>
+                                <option value="PRATA">Prata</option>
+                                <option value="BRONZE">Bronze</option>
+                            </select>
+                            <i class="fas fa-chevron-down sf-select-arrow"></i>
+                        </div>
+                        <button onclick="limparFiltrosComp()" class="sf-btn-icon" title="Limpar filtros">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="tableComparacao">
+                            <thead><tr>
+                                <th data-tip="Código do cliente no WinThor (CODCLI)">Cód. <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                                <th data-tip="Nome/fantasia do cliente">Cliente <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                                <th data-tip="Nível de classificação registrado pelo cron">Nível <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                                <th data-tip="RCA registrado pelo cron no PostgreSQL">RCA no Sistema (Cron) <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                                <th data-tip="RCA atual no WinThor (PCCLIENT.CODUSUR1 consultado agora)">RCA no WinThor (Atual) <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                                <th data-tip="Indica se a divergência foi causada por rotina do sistema (cron/substituição) ou alteração direta no WinThor">Origem da Alteração <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                                <th data-tip="Dias sem compra registrados pelo cron">Dias s/ Compra <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                                <th data-tip="Status registrado: Ativo, Alerta ou Risco">Status Cron <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                                <th data-tip="Resultado da comparação entre os dois sistemas">Situação <span class="tip-icon"><i class="fas fa-question-circle"></i></span></th>
+                            </tr></thead>
+                            <tbody id="tbodyComparacao"></tbody>
+                        </table>
+                    </div>
+                    <div class="comp-pag">
+                        <span id="compPagInfo">—</span>
+                        <button id="compBtnAnterior" onclick="mudaPagComp(-1)" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+                        <button id="compBtnProximo"  onclick="mudaPagComp(1)">Próximo <i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+
+                <div id="compErro" style="display:none;" class="comp-empty">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p id="compErroMsg">Erro ao carregar comparação.</p>
+                </div>
+            </div>
+
+            <div id="tab10" class="tab-content">
+                <div class="tab-title-area">
+                    <h3>Logs de Correção de Cadastro (Procedure WinThor)</h3>
+                    <p class="tab-desc">
+                        Histórico das alterações automáticas de <b>CATEGORIA</b> com base no <b>CODREDE</b>.
+                        Registros antigos podem conter alterações de outros campos.
+                    </p>
+                </div>
+
+                <div class="comp-fix-panel">
+                    <div class="comp-fix-head">
+                        <div class="comp-fix-meta">
+                            <span id="compFixTotal" class="comp-fix-chip"><i class="fas fa-list"></i> 0 logs</span>
+                            <span id="compFixClientes" class="comp-fix-chip"><i class="fas fa-users"></i> 0 clientes</span>
+                            <span id="compFixExecucoes" class="comp-fix-chip"><i class="fas fa-play-circle"></i> 0 execuções</span>
+                            <span id="compFixUltimo" class="comp-fix-chip"><i class="fas fa-clock"></i> Último: -</span>
+                        </div>
+                        <button onclick="recarregarLogsCorrecaoCadastro()" class="sf-btn-icon" title="Recarregar logs de correção">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="filter-bar comp-filter-bar comp-fix-filter-bar">
+                        <div class="sf-input-wrap sf-input-search">
+                            <i class="fas fa-search"></i>
+                            <input
+                                type="text"
+                                id="compFixFiltroTexto"
+                                placeholder="Buscar por cod., cliente ou execucao..."
+                                oninput="filtrarLogsCorrecaoCadastro()"
+                            >
+                        </div>
+                        <div class="comp-fix-date-range">
+                            <div class="sf-input-wrap comp-fix-date-wrap">
+                                <i class="fas fa-calendar-day"></i>
+                                <input
+                                    type="date"
+                                    id="compFixFiltroDataIni"
+                                    title="Data inicial"
+                                    onchange="filtrarLogsCorrecaoCadastro()"
+                                >
+                            </div>
+                            <span class="comp-fix-date-sep">ate</span>
+                            <div class="sf-input-wrap comp-fix-date-wrap">
+                                <i class="fas fa-calendar-check"></i>
+                                <input
+                                    type="date"
+                                    id="compFixFiltroDataFim"
+                                    title="Data final"
+                                    onchange="filtrarLogsCorrecaoCadastro()"
+                                >
+                            </div>
+                        </div>
+                        <div class="sf-select-wrap comp-select-wrap" data-comp-custom-select="compFixFiltroCampo">
+                            <i class="fas fa-columns"></i>
+                            <select id="compFixFiltroCampo" onchange="filtrarLogsCorrecaoCadastro()">
+                                <option value="">Todos os campos</option>
+                                <option value="CATEGORIA">CATEGORIA</option>
+                                <option value="CODATV1">CODATV1</option>
+                                <option value="CODREDE">CODREDE</option>
+                            </select>
+                            <i class="fas fa-chevron-down sf-select-arrow"></i>
+                        </div>
+                        <div class="sf-select-wrap comp-select-wrap" data-comp-custom-select="compFixFiltroAmbiente">
+                            <i class="fas fa-database"></i>
+                            <select id="compFixFiltroAmbiente" onchange="filtrarLogsCorrecaoCadastro()">
+                                <option value="">Todos ambientes</option>
+                            </select>
+                            <i class="fas fa-chevron-down sf-select-arrow"></i>
+                        </div>
+                        <button onclick="limparFiltrosLogsCorrecaoCadastro()" class="sf-btn-icon" title="Limpar filtros da aba de logs">
+                            <i class="fas fa-eraser"></i>
+                        </button>
+                        <span id="compFixCounter" class="filter-counter"></span>
+                    </div>
+                    <div class="table-responsive comp-fix-table-wrap">
+                        <table id="tableCompFixLogs">
+                            <thead>
+                                <tr>
+                                    <th>Quando</th>
+                                    <th>COD.</th>
+                                    <th>Cliente</th>
+                                    <th>Campos alterados</th>
+                                    <th>Execucao</th>
+                                    <th>Ambiente</th>
+                                </tr>
+                            </thead>
+                            <tbody id="compFixLogsBody">
+                                <tr>
+                                    <td colspan="6" class="comp-empty">
+                                        <i class="fas fa-spinner fa-spin"></i> Carregando logs...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /mainContent -->
+    </div><!-- /container -->
+
+    <!-- Modal: Histórico de Alterações (Sistema vs WinThor) -->
+    <div id="compHistModal" class="comp-hist-modal" aria-hidden="true" onclick="fecharHistoricoComparacao(event)">
+        <div class="comp-hist-dialog" role="dialog" aria-modal="true" aria-labelledby="compHistTitulo" onclick="event.stopPropagation()">
+            <div class="comp-hist-header">
+                <div>
+                    <h3 id="compHistTitulo">Histórico do Cliente</h3>
+                    <p id="compHistSubtitulo">—</p>
+                </div>
+                <button type="button" class="comp-hist-close" onclick="fecharHistoricoComparacao()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="comp-hist-meta" id="compHistMeta"></div>
+            <div class="comp-hist-body" id="compHistBody">
+                <div class="comp-hist-loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Carregando histórico...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/auth-guard.js?v=2.0"></script>
+    <script src="js/relatorio-gestores.js?v=5.0"></script>
+    <script src="js/custom-datepicker.js?v=1.2"></script>
+</body>
+</html>
+
+

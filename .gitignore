@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+
+# Runtime output
+logs/
+output/
+*.log
+
+# Local agent and editor state
+.agents/
+.codex/
+.vscode/
+.idea/
+
+# Temporary files
+tmp_*
+*.tmp
+*.bak
+
+# Test and coverage output
+coverage/
+
+# Operating system files
+.DS_Store
+Thumbs.db

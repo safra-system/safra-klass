@@ -1,0 +1,97 @@
+/* login.css — Safra DS v3.1 */
+body {
+  margin:0; padding:0; overflow:hidden;
+  font-family:'Inter',sans-serif;
+  background:var(--surface-0,#000305);
+  height:100vh; display:flex; justify-content:center; align-items:center; position:relative;
+}
+
+.login-bg {
+  position:absolute; top:0; left:0; width:100%; height:55vh;
+  background: linear-gradient(135deg, #012338 0%, #007dcc 100%);
+  z-index:0;
+  border-bottom-left-radius: 60% 20px;
+  border-bottom-right-radius: 60% 20px;
+}
+
+/* Partículas decorativas */
+.login-bg::before {
+  content:'';
+  position:absolute; inset:0;
+  background: radial-gradient(circle at 30% 60%, rgba(0,125,204,.25) 0%, transparent 60%),
+              radial-gradient(circle at 80% 20%, rgba(0,145,235,.15) 0%, transparent 50%);
+}
+
+.login-container {
+  width:100%; padding:20px;
+  display:flex; justify-content:center; position:relative; z-index:10;
+}
+
+.login-card {
+  background: rgba(2,10,17,.92);
+  backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+  width:100%; max-width:420px;
+  padding:48px 40px;
+  border-radius:20px;
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow: 0 0 0 1px rgba(0,125,204,.15), 0 24px 64px rgba(0,0,0,.6), var(--shadow-glow-blue,0 0 20px rgba(0,125,204,.2));
+  text-align:center;
+  animation: loginSlide .6s cubic-bezier(.16,1,.3,1);
+}
+
+@keyframes loginSlide { from{transform:translateY(28px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+/* Logo */
+.logo-area { margin-bottom:28px; display:flex; justify-content:center; }
+
+.logo-circle {
+  width:90px; height:90px;
+  background:rgba(0,125,204,.12);
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  border:2px solid rgba(0,125,204,.35);
+  box-shadow: 0 0 24px rgba(0,125,204,.25);
+  padding:12px;
+}
+.logo-circle img { max-width:100%; max-height:100%; object-fit:contain; border-radius:50%; }
+
+/* Título */
+h2 {
+  color:#f1f5f9; margin:0 0 10px;
+  font-size:1.6rem; font-weight:800; letter-spacing:-.5px;
+}
+
+p {
+  color:#94a3b8; font-size:.9rem; margin-bottom:32px; line-height:1.55;
+}
+
+/* Botão Google */
+.btn-google {
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:50px;
+  padding:13px 24px;
+  text-decoration:none; color:#f1f5f9;
+  font-weight:600; font-size:.95rem;
+  transition:all .2s; gap:12px; position:relative; overflow:hidden;
+}
+.btn-google:hover {
+  background:rgba(255,255,255,.12);
+  border-color:rgba(0,125,204,.5);
+  box-shadow:0 0 20px rgba(0,125,204,.2);
+  transform:translateY(-2px);
+}
+.btn-google:active { transform:translateY(0); }
+.google-icon { width:22px; height:22px; display:block; flex-shrink:0; }
+
+/* Divisor */
+.divider { margin:28px 0; position:relative; text-align:center; }
+.divider::before { content:''; position:absolute; top:50%; left:0; right:0; height:1px; background:rgba(255,255,255,.08); z-index:1; }
+.divider span { background:rgba(2,10,17,.92); padding:0 14px; color:#475569; font-size:.7rem; text-transform:uppercase; letter-spacing:1px; position:relative; z-index:2; font-weight:700; }
+
+/* Rodapé */
+.footer-login { margin-top:8px; }
+.footer-login p { margin:0; font-size:.82rem; font-weight:500; color:#475569; }
+.footer-login small { font-size:.72rem; color:#334155; margin-top:4px; display:block; }
+.footer-login i { color:#007dcc; margin-right:5px; }

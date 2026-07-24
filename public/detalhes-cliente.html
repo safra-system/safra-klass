@@ -1,0 +1,407 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safra Klass - Detalhes do Cliente</title>
+    
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Importante: Chart.js antes do seu script -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/safra-ds.css?v=3.3">
+    <link rel="stylesheet" href="css/detalhes-cliente.css?v=4.6">
+</head>
+<body>
+    <!-- Header Fixo -->
+    <header class="header">
+        <div class="header-container">
+            <div class="header-top">
+                <div class="header-left">
+                    <button id="backBtn" class="btn btn-outline btn-icon">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    
+                    <!-- AQUI ESTÁ A CORREÇÃO: Classe .logo-header -->
+                    <img src="img/logo.png" alt="Logo Safra" class="logo-header">
+
+                    <div class="header-title">
+                        <h1>Detalhes do Cliente</h1>
+                        <p>Análise detalhada de performance mensal</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    
+                    <!-- NOVO: Grupo de Filtros -->
+                    <div class="filter-group">
+                        <button class="btn-filter active" data-period="all">Tudo</button>
+                        <button class="btn-filter" data-period="3">Últimos 3 meses</button>
+                        <button class="btn-filter" data-period="6">Últimos 6 meses</button>
+                        <button class="btn-filter" data-period="12">Últimos 12 meses</button>
+                    </div>
+
+                    <div class="divider-vertical"></div>
+
+                    <button id="theme-toggle" class="btn btn-ghost btn-icon" aria-label="Alternar Tema">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button id="exportDetailsBtn" class="btn btn-outline">
+                        <i class="fas fa-download"></i> <span style="margin-left:5px">CSV</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Cabeçalho do Cliente -->
+        <div class="card section slide-in">
+            <div class="client-header-content">
+                <div id="clientTitle" class="client-title-block">
+                    <h2><i class="fas fa-user-circle"></i> Carregando...</h2>
+                    <p id="clientSubtitle" class="text-light"></p>
+                </div>
+                <div class="client-info-grid" id="clientInfo">
+                    <!-- Preenchido via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Cards de Estatísticas (Grid) -->
+        <div class="grid grid-cols-4 section fade-in" id="monthlyStats">
+            <!-- Preenchido via JS -->
+        </div>
+
+
+
+        <!-- Tabela -->
+        <div class="card section fade-in">
+            <div class="card-header-flex">
+                <h3 class="section-title" style="margin-bottom:0">Histórico de Performance</h3>
+            </div>
+            <div class="table-container" style="margin-top: 1rem;">
+                <table class="details-table" id="detailsTable">
+                    <thead>
+                        <tr>
+                            <th>Mês/Ano</th>
+                            <th>Fat</th>
+                            <th>Dev</th>
+                            <th>Frete</th>
+                            <th>Mix</th>
+                            <th>Vol</th>
+                            <th>Prazo</th>
+                            <th>Canal</th>
+                            <th>Desc</th>
+                            <th>N Fat</th>
+                            <th>Atraso</th>
+                            <th>Média</th>
+                            <th>Faixa</th>
+                            
+                            <th>Devolução</th>
+                            <th>Líquido</th>
+                            <th>Frete Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailsBody">
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Loading e Error states -->
+        <div id="loading" class="loading-overlay hidden">
+            <div class="spinner"></div>
+            <p>Carregando dados...</p>
+        </div>
+
+        <!-- Gráfico -->
+        <div class="chart-container section fade-in">
+            <h3 class="section-title">Evolução da Média</h3>
+            
+            <canvas id="performanceChart"></canvas>
+            
+        </div>
+
+        <div class="card section fade-in products-insights-section">
+            <div class="products-insights-header">
+                <div>
+                    <h3 class="section-title" style="margin-bottom:6px">Produtos Mais Comprados</h3>
+                    <p class="products-insights-subtitle">
+                        Ranking dos itens do cliente no período selecionado, com sugestões rápidas de recompra.
+                    </p>
+                </div>
+                <div id="productsInsightsSummary" class="products-insights-summary"></div>
+            </div>
+
+            <div class="products-insights-grid">
+                <div class="products-chart-wrap">
+                    <canvas id="topProductsChart"></canvas>
+                    <div id="topProductsEmpty" class="products-empty hidden">Sem compras de produtos no período.</div>
+                </div>
+
+                <div class="products-suggestions-wrap">
+                    <h4>Sugestões de Oferta</h4>
+                    <div id="productSuggestions" class="products-suggestions-list"></div>
+                </div>
+            </div>
+
+            <div class="orders-timeline-section">
+                <div class="orders-timeline-header">
+                    <h4>Pedidos no Período</h4>
+                    <div id="ordersTimelineSummary" class="orders-timeline-summary"></div>
+                </div>
+                <div class="orders-chart-wrap">
+                    <div class="orders-table-container">
+                        <table class="orders-table" id="ordersTable">
+                            <thead>
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Data</th>
+                                    <th>Valor</th>
+                                    <th>Qtd Itens</th>
+                                    <th>Produtos</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="ordersTableEmpty" class="products-empty hidden">Sem pedidos no período selecionado.</div>
+                </div>
+            </div>
+        </div>
+
+                <!-- NOVO: Comparação de Performance -->
+        <div class="card section fade-in" style="padding: 0; overflow: hidden;">
+            <div class="comparison-header-strip">
+                <div class="icon-box-purple"><i class="fas fa-chart-line"></i></div>
+                <h3>Comparação de Performance</h3>
+            </div>
+            
+            <div class="comparison-body">
+                <div class="grid grid-cols-2-responsive">
+                    
+                    <!-- Melhor Mês -->
+                    <div class="comp-card best-month">
+                        <div class="comp-card-header">
+                            <div class="comp-icon-circle green">
+                                <i class="fas fa-award"></i>
+                            </div>
+                            <h4>Melhor Mês</h4>
+                        </div>
+                        
+                        <div class="comp-row">
+                            <span class="comp-label">Período:</span>
+                            <span class="comp-value-text" id="bestMonthDate">-</span>
+                        </div>
+                        <div class="comp-row">
+                            <span class="comp-label">Média:</span>
+                            <span class="comp-value-score text-green" id="bestMonthScore">-</span>
+                        </div>
+                        <div class="comp-row">
+                            <span class="comp-label">Classificação:</span>
+                            <span id="bestMonthBadge"></span>
+                        </div>
+                        <div class="comp-row">
+                            <span class="comp-label">Vendas:</span>
+                            <span class="comp-value-text" id="bestMonthSales">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Pior Mês -->
+                    <div class="comp-card worst-month">
+                        <div class="comp-card-header">
+                            <div class="comp-icon-circle red">
+                                <i class="fas fa-arrow-trend-down"></i>
+                            </div>
+                            <h4>Pior Mês</h4>
+                        </div>
+                        
+                        <div class="comp-row">
+                            <span class="comp-label">Período:</span>
+                            <span class="comp-value-text" id="worstMonthDate">-</span>
+                        </div>
+                        <div class="comp-row">
+                            <span class="comp-label">Média:</span>
+                            <span class="comp-value-score text-red" id="worstMonthScore">-</span>
+                        </div>
+                        <div class="comp-row">
+                            <span class="comp-label">Classificação:</span>
+                            <span id="worstMonthBadge"></span>
+                        </div>
+                        <div class="comp-row">
+                            <span class="comp-label">Vendas:</span>
+                            <span class="comp-value-text" id="worstMonthSales">-</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-action-layout fade-in" style="margin-top: 20px;">
+            
+            <div class="card category-card">
+                <div class="category-icon-bg">
+                    <i class="fas fa-tags"></i>
+                </div>
+                <h3>Categoria Atual</h3>
+                <div class="category-value" id="labelCategoria">---</div>
+                <p class="category-subtitle">Base WinThor (PCCLIENT)</p>
+            </div>
+
+            <div class="card action-plan-card">
+                <div class="card-header-strip">
+                    <div class="strip-icon"><i class="fas fa-tasks"></i></div>
+                    <h2>Plano de Ação (Próximo Nível)</h2>
+                </div>
+                <div class="card-body">
+                    <div id="nextLevelContainer">
+                        <p style="color:var(--text-muted); text-align:center">Calculando metas...</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="error" class="error-banner hidden">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span id="errorMessage"></span>
+        </div>
+    </main>
+
+    <div id="orderDetailModal" class="order-modal hidden" aria-hidden="true">
+        <div class="order-modal-dialog">
+            <div class="order-modal-header">
+                <div>
+                    <h4 id="orderModalTitle">Pedido</h4>
+                    <p id="orderModalSubtitle">Detalhes do pedido selecionado</p>
+                </div>
+                <button id="orderModalClose" class="order-modal-close" type="button" aria-label="Fechar detalhe do pedido">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="order-modal-body">
+                <div class="order-modal-metrics">
+                    <div class="order-modal-metric">
+                        <span>Valor do pedido</span>
+                        <strong id="orderModalValor">R$ 0,00</strong>
+                    </div>
+                    <div class="order-modal-metric">
+                        <span>Itens faturados</span>
+                        <strong id="orderModalQtdItens">0</strong>
+                    </div>
+                    <div class="order-modal-metric">
+                        <span>Produtos distintos</span>
+                        <strong id="orderModalQtdProdutos">0</strong>
+                    </div>
+                    <div class="order-modal-metric">
+                        <span>Itens listados</span>
+                        <strong id="orderModalItensListados">0</strong>
+                    </div>
+                </div>
+
+                <div class="order-modal-pricing">
+                    <div class="order-modal-section-head">
+                        <div>
+                            <h5>Comparativo Total por Categoria</h5>
+                            <p>Estimativa do mesmo pedido nos cinco níveis comerciais.</p>
+                        </div>
+                    </div>
+                    <div id="orderModalPricingSummary" class="order-modal-pricing-summary"></div>
+                </div>
+
+                <div class="order-modal-items">
+                    <div class="order-modal-section-head">
+                        <div>
+                            <h5>Itens do pedido e comparativo</h5>
+                            <p>Valores simulados por item, comparando todas as categorias.</p>
+                        </div>
+                    </div>
+                    <div class="order-modal-items-table-wrap">
+                        <table class="order-modal-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Cód.</th>
+                                    <th>Produto</th>
+                                    <th>Qtd</th>
+                                    <th>Paga hoje</th>
+                                    <th>Bronze</th>
+                                    <th>Prata</th>
+                                    <th>Ouro</th>
+                                    <th>Platinum</th>
+                                    <th>Diamante</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orderModalItemsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="aiClientChat" class="ai-chat-widget" aria-live="polite">
+        <div id="aiChatTeaser" class="ai-chat-teaser" aria-hidden="true">
+            <div class="ai-chat-teaser-head">
+                <div class="ai-chat-teaser-badge">Maia</div>
+                <button
+                    id="aiChatTeaserMinimize"
+                    class="ai-chat-teaser-minimize"
+                    type="button"
+                    aria-label="Minimizar mensagem da IA"
+                    title="Minimizar mensagem da IA"
+                    aria-pressed="false"
+                >-</button>
+            </div>
+            <div id="aiChatTeaserText" class="ai-chat-teaser-text">Em que posso ajudar agora?</div>
+        </div>
+        <button id="aiChatToggle" class="ai-chat-toggle" type="button" aria-label="Abrir assistente de IA do cliente">
+            <img class="ai-chat-toggle-avatar" src="/img/maia.jpeg" alt="Maia">
+            <span>IA Cliente</span>
+        </button>
+
+        <section id="aiChatPanel" class="ai-chat-panel" aria-hidden="true">
+            <header class="ai-chat-header">
+                <div class="ai-chat-title-wrap">
+                    <h4>Assistente IA</h4>
+                    <p>Análise comercial do cliente atual</p>
+                </div>
+                <button id="aiChatClose" class="ai-chat-close" type="button" aria-label="Fechar assistente">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+
+            <div id="aiChatMessages" class="ai-chat-messages"></div>
+
+            <form id="aiChatForm" class="ai-chat-form">
+                <textarea
+                    id="aiChatInput"
+                    class="ai-chat-input"
+                    rows="2"
+                    maxlength="2000"
+                    placeholder="Pergunte sobre próximos produtos, oportunidades e melhoria da nota..."
+                ></textarea>
+                <button id="aiChatSend" class="ai-chat-send" type="submit">
+                    <i class="fas fa-paper-plane"></i>
+                    <span>Enviar</span>
+                </button>
+            </form>
+        </section>
+    </div>
+
+    <script src="js/auth-guard.js?v=2.0"></script>
+    <script src="js/detalhes-cliente.js?v=4.6"></script>
+</body>
+</html>
+
+

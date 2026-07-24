@@ -1,0 +1,78 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safra Klass — Carteira do Vendedor</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Reutilizamos o CSS do relatório gestores pois o estilo é idêntico -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/safra-ds.css?v=3.3">
+    <link rel="stylesheet" href="css/relatorio-gestores.css?v=4.8">
+</head>
+<body>
+
+    <header class="main-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <img src="img/logo.png" alt="Logo Safra" class="logo-img">
+                <div class="logo-text">
+                    <h1>Safra<span class="brand-name">Klass</span><span class="brand-version">v3.1</span></h1>
+                    <p>Departamento Comercial &bull; Carteira do Vendedor</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span class="header-status"><span class="status-dot"></span>Online</span>
+                <div class="h-divider"></div>
+                <button id="theme-toggle" class="btn-header" title="Alternar Tema"><i class="fas fa-moon"></i></button>
+                <a href="relatorio-gestores.html" class="btn-header"><i class="fas fa-arrow-left"></i> Voltar</a>
+                <a href="/auth/logout" class="btn-header btn-header--exit"><i class="fas fa-sign-out-alt"></i> Sair</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div id="loader" class="loading">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p style="margin-top:15px">Carregando carteira...</p>
+        </div>
+
+        <div id="mainContent" class="card" style="display: none;">
+            <div style="padding: 20px; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h2 id="rcaTitle" style="margin:0; color:var(--text-main)">RCA - Carregando...</h2>
+                    <p id="rcaSubtitle" style="margin:5px 0 0 0; color:var(--text-muted)">Carteira atual do vendedor no WinThor</p>
+                </div>
+                <div class="badge bg-blue" id="totalClientesBadge" style="font-size: 1rem; padding: 8px 15px;">
+                    0 Clientes
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table id="tableCarteira">
+                    <thead>
+                        <tr>
+                            <th>Cód.</th>
+                            <th>Cliente</th>
+                            <th>Classificação</th>
+                            <th>Status (Grupo)</th>
+                            <th>Dias s/ Compra</th>
+                            <th>Última Compra</th>
+                        </tr>
+                    </thead>
+                    <tbody id="carteiraBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script src="js/auth-guard.js?v=2.0"></script>
+    <script src="js/detalhes-rca.js?v=3.3"></script>
+</body>
+</html>
+
