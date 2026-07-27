@@ -3146,6 +3146,17 @@ app.get('/api/parametros', canAccessConfig, async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+async function configurarAgendamentoPrincipalNoStartup() {
+  try {
+    await rotativoRepo.aplicarInicializacaoClassificacaoAtivaV1();
+  } catch (err) {
+    console.error('[Agendador] Erro ao aplicar inicializacao da classificacao ativa no startup:', err);
+    return;
+  }
+
+  await configurarAgendamentoDinamico();
+}
+
 app.post('/api/parametros', canAccessConfig, async (req, res) => {
     try {
         const novosValores = { ...req.body };
@@ -3583,7 +3594,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log(`📊 Acesse: http://localhost:${PORT}`);
   console.log(`💾 Modo: ${process.env.NODE_ENV || 'development'}`);
-  configurarAgendamentoDinamico();
+  configurarAgendamentoPrincipalNoStartup();
   configurarAgendamentoCorrecaoCadastroWinthor();
   winthorCorrecaoService.garantirInfraestrutura().catch((err) => {
     console.error('[WinthorFix] Erro ao garantir infraestrutura de logs:', err?.message || err);
