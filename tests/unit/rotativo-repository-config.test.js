@@ -198,7 +198,7 @@ test('inicializacao usa SQL idempotente que mescla somente cron e marcador', asy
   assert.match(update, /SET extra_config = jsonb_set\(/);
   assert.match(update, /'\{cron_config\}', COALESCE\(extra_config -> 'cron_config', '\{\}'::jsonb\) \|\| jsonb_build_object\('ativo', true, 'modo', 'CLASSIFICACAO'\)/);
   assert.match(update, /'\{_system_migrations\}', COALESCE\(extra_config -> '_system_migrations', '\{\}'::jsonb\) \|\| jsonb_build_object\('cron_classificacao_ativa_v1', true\)/);
-  assert.match(update, /WHERE NOT \(COALESCE\(extra_config, '\{\}'::jsonb\) -> '_system_migrations' \? 'cron_classificacao_ativa_v1'\)/);
+  assert.match(update, /WHERE NOT \(COALESCE\(extra_config -> '_system_migrations', '\{\}'::jsonb\) \? 'cron_classificacao_ativa_v1'\)/);
 });
 
 test('marcador existente preserva a escolha posterior do usuario', async () => {
@@ -255,6 +255,29 @@ test('salvamento preserva os parâmetros desabilitados e grava o modo', async ()
   assert.equal(extra.cron_config.modo, 'CLASSIFICACAO');
   assert.deepEqual(extra.rcas_rotativa, [10, 110]);
   assert.equal(extra.winthor_fix_config.sincronizar_bitrix, true);
+});
+
+test('primeiro salvamento marca a migracao e preserva a escolha desligada em movimentacao', async () => {
+  const { repo, capturedQueries } = createCapturingRepository();
+
+  await repo.salvarParametrosSistema(fullPayload({
+    ativo: false,
+    modo: 'MOVIMENTACAO',
+    datetime: '',
+    frequency: 'monthly'
+  }));
+
+  const insert = capturedQueries.find(({ query }) => query.includes('INSERT INTO parametros_sistema'));
+  const extra = JSON.parse(insert.params[8]);
+  assert.deepEqual(extra.cron_config, {
+    ativo: false,
+    modo: 'MOVIMENTACAO',
+    datetime: '',
+    frequency: 'monthly'
+  });
+  assert.deepEqual(extra._system_migrations, {
+    cron_classificacao_ativa_v1: true
+  });
 });
 
 test('leitura preserva modo válido, agendamento e flag WinThor', async () => {

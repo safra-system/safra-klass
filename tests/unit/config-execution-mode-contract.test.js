@@ -71,8 +71,17 @@ test('carrega e salva um unico modo preservando valores', () => {
 });
 
 test('fallback sem cron inicia ativo em classificacao', () => {
-  assert.match(script, /elAtivo\.checked\s*=\s*true/);
-  assert.match(script, /setSelectedExecutionMode\('CLASSIFICACAO'\)/);
+  const cronConfigStart = script.indexOf('if (d.cron_config) {');
+  const fallbackStart = script.indexOf('} else {', cronConfigStart);
+  const fallbackEnd = script.indexOf('if (elWinthorFixAtivo)', fallbackStart);
+  assert.ok(
+    cronConfigStart > -1 && fallbackStart > cronConfigStart && fallbackEnd > fallbackStart,
+    'fallback sem cron_config nao encontrado'
+  );
+
+  const fallback = script.slice(fallbackStart, fallbackEnd);
+  assert.match(fallback, /elAtivo\.checked\s*=\s*true/);
+  assert.match(fallback, /setSelectedExecutionMode\('CLASSIFICACAO'\)/);
 });
 
 test('bloqueio visual usa classe aria e inert', () => {

@@ -82,6 +82,8 @@ test('preview autentica usuario ficticio e inicia ativo em classificacao', async
     assert.equal(params.success, true);
     assert.equal(params.data.cron_config.ativo, true);
     assert.equal(params.data.cron_config.modo, 'CLASSIFICACAO');
+    assert.equal(params.data.cron_config.datetime, '');
+    assert.equal(params.data.cron_config.frequency, 'monthly');
     assert.equal(params.data.winthor_fix_config.ativo, false);
     assert.equal(params.data.winthor_fix_config.sincronizar_bitrix, false);
     assert.equal(params.data.pdf_config.ativo, false);

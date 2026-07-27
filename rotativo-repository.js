@@ -1151,7 +1151,7 @@ async aplicarInicializacaoClassificacaoAtivaV1(connExistente) {
                     || jsonb_build_object('cron_classificacao_ativa_v1', true),
                 true
             )
-            WHERE NOT (COALESCE(extra_config, '{}'::jsonb) -> '_system_migrations'
+            WHERE NOT (COALESCE(extra_config -> '_system_migrations', '{}'::jsonb)
                 ? 'cron_classificacao_ativa_v1')
         `);
     } catch (err) {
@@ -1244,6 +1244,7 @@ async salvarParametrosSistema(params) {
             cron_config:   normalizeCronConfig(params.cron_config ?? { ativo: false, datetime: '', frequency: 'monthly' }),
             pdf_config:    params.pdf_config    ?? { ativo: false, modo_teste: false, id_tester: 0 },
             winthor_fix_config: normalizeWinthorFixConfig(params.winthor_fix_config),
+            _system_migrations: { cron_classificacao_ativa_v1: true },
         };
 
         await conn.query(`
