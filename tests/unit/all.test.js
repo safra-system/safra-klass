@@ -6,3 +6,5 @@ require('./config-execution-mode-contract.test');
 require('./startup-cron-orchestrator.test');
 require('./winthor-correction-policy.test');
 require('./winthor-correction-contract.test');
+require('./preview-server.test');
+require('./config-layout-contract.test');

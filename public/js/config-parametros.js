@@ -495,14 +495,14 @@
             && getSelectedExecutionMode() === 'MOVIMENTACAO'
             && elWinthorFixSincronizarBitrix?.checked === true;
         const statusBitrix = bitrixPermitido
-            ? 'Bitrix: PERMITIDO pela política.'
-            : 'Bitrix: BLOQUEADO (exige cron principal ativo, MOVIMENTACAO e flag ligada).';
+            ? 'Bitrix: PERMITIDO pela política atual.'
+            : 'Bitrix: BLOQUEADO (ative o agendamento principal no modo MOVIMENTACAO e esta opção).';
 
         if (elWinthorFixAtivo.checked) {
-            elWinthorFixStatus.textContent = `Status: ATIVADO (${intervaloTexto.toLowerCase()}). ${statusBitrix}`;
+            elWinthorFixStatus.textContent = `Status: ATIVADO (${intervaloTexto.toLowerCase()}).\n${statusBitrix}`;
             elWinthorFixStatus.style.color = 'var(--success)';
         } else {
-            elWinthorFixStatus.textContent = `Status: DESATIVADO (nenhuma execução automática). ${statusBitrix}`;
+            elWinthorFixStatus.textContent = `Status: DESATIVADO (nenhuma execução automática).\n${statusBitrix}`;
             elWinthorFixStatus.style.color = 'var(--text-tertiary)';
         }
     }
