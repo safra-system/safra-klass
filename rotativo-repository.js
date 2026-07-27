@@ -1131,10 +1131,43 @@ async listarTodosRotativos() {
   /**
    * Busca os parÃ¢metros do sistema (regras de movimentaÃ§Ã£o)
    */
+async aplicarInicializacaoClassificacaoAtivaV1(connExistente) {
+    let conn = connExistente;
+    try {
+        if (!conn) conn = await this.pool.connect();
+
+        await conn.query(`
+            UPDATE parametros_sistema
+            SET extra_config = jsonb_set(
+                jsonb_set(
+                    COALESCE(extra_config, '{}'::jsonb),
+                    '{cron_config}',
+                    COALESCE(extra_config -> 'cron_config', '{}'::jsonb)
+                        || jsonb_build_object('ativo', true, 'modo', 'CLASSIFICACAO'),
+                    true
+                ),
+                '{_system_migrations}',
+                COALESCE(extra_config -> '_system_migrations', '{}'::jsonb)
+                    || jsonb_build_object('cron_classificacao_ativa_v1', true),
+                true
+            )
+            WHERE NOT (COALESCE(extra_config, '{}'::jsonb) -> '_system_migrations'
+                ? 'cron_classificacao_ativa_v1')
+        `);
+    } catch (err) {
+        this.logger?.error?.('[RotativoRepo] Erro ao inicializar classificacao ativa:', err.message);
+        throw err;
+    } finally {
+        if (!connExistente && conn) conn.release();
+    }
+}
+
 async obterParametrosSistema() {
     let conn;
     try {
         conn = await this.pool.connect();
+
+        await this.aplicarInicializacaoClassificacaoAtivaV1(conn);
 
         const result = await conn.query(`
             SELECT
@@ -1238,7 +1271,13 @@ async salvarParametrosSistema(params) {
                 fases_bitrix_bloqueio      = EXCLUDED.fases_bitrix_bloqueio,
                 mapa_bitrix                = EXCLUDED.mapa_bitrix,
                 rca_segmento_map           = EXCLUDED.rca_segmento_map,
-                extra_config               = EXCLUDED.extra_config
+                extra_config               = jsonb_set(
+                    EXCLUDED.extra_config,
+                    '{_system_migrations}',
+                    COALESCE(parametros_sistema.extra_config -> '_system_migrations', '{}'::jsonb)
+                        || COALESCE(EXCLUDED.extra_config -> '_system_migrations', '{}'::jsonb),
+                    true
+                )
         `, [
             params.dias_rotativa             ?? 31,
             params.dias_longo_prazo          ?? 60,
