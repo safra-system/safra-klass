@@ -17,6 +17,15 @@ const dbSwitch = require('./db-switch');
 const MovimentacaoCarteiraService = require('./movimentacao-carteira-service');
 const cron = require('node-cron');
 const RelatorioService = require('./relatorio-service');
+const { createAutomaticExecutionRunner } = require('./automatic-execution-runner');
+const { createWinthorCorrectionRunner } = require('./winthor-correction-runner');
+const { createStartupCronOrchestrator } = require('./startup-cron-orchestrator');
+const {
+    EXECUTION_MODES,
+    createExecutionPolicy,
+    normalizeCronConfigForWrite,
+    normalizeWinthorFixConfig
+} = require('./execution-policy');
 const WinthorCadastroCorrecaoService = require('./winthor-cadastro-correcao-service');
 const BitrixService = require('./bitrix-service');
 
@@ -31,6 +40,11 @@ const winthorCorrecaoService = new WinthorCadastroCorrecaoService({
   logger: console,
   pgPool: rotativoRepo.pool,
   bitrixService
+});
+const correctionRunner = createWinthorCorrectionRunner({
+  paramsRepository: rotativoRepo,
+  correctionService: winthorCorrecaoService,
+  logger: console
 });
 
 const SubstituicaoCarteiraService = require('./substituicao-carteira-service');
@@ -3135,8 +3149,19 @@ app.get('/api/parametros', canAccessConfig, async (req, res) => {
 
 app.post('/api/parametros', canAccessConfig, async (req, res) => {
     try {
-        const novosValores = req.body;
-        if (!novosValores.dias_rotativa || !novosValores.fases_bitrix_bloqueio) {
+        const novosValores = { ...req.body };
+        try {
+            novosValores.cron_config = normalizeCronConfigForWrite(novosValores.cron_config);
+        } catch (validationError) {
+            return res.status(400).json({
+                success: false,
+                error: 'Modo de execucao invalido. Use CLASSIFICACAO ou MOVIMENTACAO.'
+            });
+        }
+        if (
+            novosValores.cron_config.modo === EXECUTION_MODES.MOVIMENTACAO &&
+            (!novosValores.dias_rotativa || !novosValores.fases_bitrix_bloqueio)
+        ) {
             return res.status(400).json({ success: false, error: "Dados incompletos" });
         }
         await rotativoRepo.salvarParametrosSistema(novosValores);
@@ -3156,7 +3181,10 @@ app.post('/api/reload-cron', canAccessConfig, async (req, res) => {
 app.post('/api/winthor/corrigir-cadastro-clientes', canAccessConfig, async (req, res) => {
   try {
     const forceRecreateProcedure = Boolean(req.body?.forceRecreateProcedure);
-    const resultado = await winthorCorrecaoService.executarCorrecao({ forceRecreateProcedure });
+    const resultado = await correctionRunner.runCorrection({
+      source: 'MANUAL',
+      forceRecreateProcedure
+    });
     res.json({ success: true, data: resultado });
   } catch (err) {
     console.error('[WinthorFix] Erro ao corrigir cadastro de clientes:', err);
@@ -3197,7 +3225,8 @@ app.post('/api/winthor/rollback-correcao-legado', canAccessConfig, async (req, r
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(20000, Math.trunc(limitRaw))) : 5000;
     const executarCorrecaoPosRollback = req.body?.executarCorrecaoPosRollback !== false;
 
-    const resultado = await winthorCorrecaoService.executarRollbackLegado({
+    const resultado = await correctionRunner.runRollback({
+      source: 'MANUAL',
       execIds,
       codcli,
       dataInicio,
@@ -3222,6 +3251,13 @@ app.post('/api/clear-cache', canAccessConfig, (req, res) => {
 app.post('/api/disparar-relatorios-pdf', canAccessConfig, async (req, res) => {
     try {
         const params = await rotativoRepo.obterParametrosSistema();
+        const policy = createExecutionPolicy(params?.cron_config);
+        if (!policy.canSendPdf) {
+            return res.status(403).json({
+                success: false,
+                error: 'Envio de PDF permitido somente com o cron ativo no modo MOVIMENTACAO.'
+            });
+        }
         if (!params?.pdf_config?.ativo) return res.json({ success: false, error: 'PDF Desativado' });
 
         (async () => {
@@ -3325,6 +3361,14 @@ function calcularPeriodoUltimos12MesesParaMovCarteira() {
   return { DataIni, DataFim, competencia };
 }
 
+const automaticExecutionRunner = createAutomaticExecutionRunner({
+  paramsRepository: rotativoRepo,
+  createMovementService: () => new MovimentacaoCarteiraService(console),
+  createReportService: () => new RelatorioService(console),
+  calculatePeriod: calcularPeriodoUltimos12MesesParaMovCarteira,
+  logger: console
+});
+
 let cronJobAtual = null;
 let cronJobCorrecaoCadastroWinthor = null;
 
@@ -3344,14 +3388,9 @@ async function obterConfigCorrecaoCadastroWinthor() {
   let intervaloMinutos = 15;
   try {
     const params = await rotativoRepo.obterParametrosSistema();
-    const configFix = params?.winthor_fix_config || {};
-    const flag = configFix?.ativo;
-    enabledByParam = typeof flag === 'boolean' ? flag : true;
-
-    const intervaloRaw = Number(configFix?.intervalo_minutos);
-    if ([1, 15, 30].includes(intervaloRaw)) {
-      intervaloMinutos = intervaloRaw;
-    }
+    const configFix = normalizeWinthorFixConfig(params?.winthor_fix_config);
+    enabledByParam = configFix.ativo;
+    intervaloMinutos = configFix.intervalo_minutos;
   } catch (err) {
     console.error('[WinthorFix] Erro ao ler parametros de configuracao:', err?.message || err);
   }
@@ -3393,7 +3432,11 @@ async function configurarAgendamentoCorrecaoCadastroWinthor() {
 
     cronJobCorrecaoCadastroWinthor = cron.schedule(cfg.cronExpr, async () => {
       try {
-        const resultado = await winthorCorrecaoService.executarCorrecao();
+        const resultado = await correctionRunner.runCorrection({ source: 'CRON' });
+        if (resultado.skipped) {
+          console.log(`[WinthorFix] Execucao agendada ignorada: ${resultado.reason}.`);
+          return;
+        }
         console.log(
           `[WinthorFix/${resultado.ambiente}] OK | Lidos: ${resultado.totalLidos} | Corrigidos: ${resultado.totalCorrigidos} | Logs: ${resultado.totalRegistrosLog || 0}`
         );
@@ -3413,10 +3456,14 @@ async function configurarAgendamentoCorrecaoCadastroWinthor() {
 async function executarCorrecaoCadastroWinthorNoStartupSeConfigurado() {
   const cfg = await obterConfigCorrecaoCadastroWinthor();
   const runOnStartup = parseBooleanEnv(process.env.WINTHOR_FIX_CADASTRO_RUN_ON_STARTUP, false);
-  if (!cfg.enabled || !runOnStartup) return;
+  if (!cfg.enabledByEnv || !runOnStartup) return;
 
   try {
-    const resultado = await winthorCorrecaoService.executarCorrecao();
+    const resultado = await correctionRunner.runCorrection({ source: 'STARTUP' });
+    if (resultado.skipped) {
+      console.log(`[WinthorFix] Execucao de startup ignorada: ${resultado.reason}.`);
+      return;
+    }
     console.log(
       `[WinthorFix/${resultado.ambiente}] Startup | Lidos: ${resultado.totalLidos} | Corrigidos: ${resultado.totalCorrigidos} | Logs: ${resultado.totalRegistrosLog || 0}`
     );
@@ -3469,25 +3516,10 @@ async function configurarAgendamentoDinamico() {
           }
           console.log('🚀 [Agendador] Disparando execução automática!');
           try {
-             const service = new MovimentacaoCarteiraService(console);
-             const { DataIni, DataFim, competencia } = calcularPeriodoUltimos12MesesParaMovCarteira();
-             const currentParams = await rotativoRepo.obterParametrosSistema();
-             const filiaisConfig = (currentParams && currentParams.filiais_cron && currentParams.filiais_cron.length > 0) ? currentParams.filiais_cron : [1, 3, 5, 6];  // âœ… FIX #8: Incluindo filiais 5 e 6
-
-             await service.processarTodosClientesElegiveis({ CodFilial: filiaisConfig, DataIni, DataFim, competencia: null, skipBitrixEtapa5: true });
-
-             console.log(`[Cron] ✅ Execução concluída com sucesso (Bitrix Etapa 5 ignorado).`);
-
-             if (currentParams && currentParams.pdf_config && currentParams.pdf_config.ativo) {
-                console.log('📄 [Agendador] Iniciando geração de PDFs automática...');
-                const relService = new RelatorioService(console);
-                const rcasPDF = currentParams.rcas_rotativa || [10, 110]; 
-                const targetId = currentParams.pdf_config.modo_teste ? currentParams.pdf_config.id_tester : null;
-                for (const rca of rcasPDF) {
-                    await relService.processarRelatorioVendedor(rca, targetId);
-                    await new Promise(r => setTimeout(r, 2000));
-                }
-            }
+             const result = await automaticExecutionRunner.run();
+             if (result.skipped) {
+                 console.log(`[Agendador] Execução ignorada: ${result.reason}.`);
+             }
           } catch (e) { console.error('[Agendador] Erro na execução:', e); }
       };
 
@@ -3503,6 +3535,12 @@ async function configurarAgendamentoDinamico() {
       console.error('[Agendador] Erro ao configurar:', err);
   }
 }
+
+const configurarAgendamentoPrincipalNoStartup = createStartupCronOrchestrator({
+  initializeClassification: () => rotativoRepo.aplicarInicializacaoClassificacaoAtivaV1(),
+  configureMainCron: configurarAgendamentoDinamico,
+  logger: console
+});
 
 async function executarMovimentacaoCarteiraAoIniciarServidor() {
   if (process.env.MOV_CART_AUTO_RUN === 'false') {
@@ -3552,7 +3590,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log(`📊 Acesse: http://localhost:${PORT}`);
   console.log(`💾 Modo: ${process.env.NODE_ENV || 'development'}`);
-  configurarAgendamentoDinamico();
+  void configurarAgendamentoPrincipalNoStartup();
   configurarAgendamentoCorrecaoCadastroWinthor();
   winthorCorrecaoService.garantirInfraestrutura().catch((err) => {
     console.error('[WinthorFix] Erro ao garantir infraestrutura de logs:', err?.message || err);

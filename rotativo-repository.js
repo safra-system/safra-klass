@@ -4,14 +4,20 @@
 const { Pool } = require('pg');
 const oracledb = require('oracledb');
 const dbSwitch = require('./db-switch');
+const { normalizeCronConfig, normalizeWinthorFixConfig } = require('./execution-policy');
 
 class RotativoRepository {
   /**
    * @param {Console|{log:Function,error:Function}} logger
    */
-  constructor(logger) {
+  constructor(logger, options = {}) {
     this.logger = logger || console;
     this._protecaoManualSchemaReady = false;
+
+    if (options.pool) {
+      this.pool = options.pool;
+      return;
+    }
 
     const connString = process.env.POSTGRES_CONN_STRING;
     if (!connString) {
@@ -1125,10 +1131,43 @@ async listarTodosRotativos() {
   /**
    * Busca os parÃ¢metros do sistema (regras de movimentaÃ§Ã£o)
    */
+async aplicarInicializacaoClassificacaoAtivaV1(connExistente) {
+    let conn = connExistente;
+    try {
+        if (!conn) conn = await this.pool.connect();
+
+        await conn.query(`
+            UPDATE parametros_sistema
+            SET extra_config = jsonb_set(
+                jsonb_set(
+                    COALESCE(extra_config, '{}'::jsonb),
+                    '{cron_config}',
+                    COALESCE(extra_config -> 'cron_config', '{}'::jsonb)
+                        || jsonb_build_object('ativo', true, 'modo', 'CLASSIFICACAO'),
+                    true
+                ),
+                '{_system_migrations}',
+                COALESCE(extra_config -> '_system_migrations', '{}'::jsonb)
+                    || jsonb_build_object('cron_classificacao_ativa_v1', true),
+                true
+            )
+            WHERE NOT (COALESCE(extra_config -> '_system_migrations', '{}'::jsonb)
+                ? 'cron_classificacao_ativa_v1')
+        `);
+    } catch (err) {
+        this.logger?.error?.('[RotativoRepo] Erro ao inicializar classificacao ativa:', err.message);
+        throw err;
+    } finally {
+        if (!connExistente && conn) conn.release();
+    }
+}
+
 async obterParametrosSistema() {
     let conn;
     try {
         conn = await this.pool.connect();
+
+        await this.aplicarInicializacaoClassificacaoAtivaV1(conn);
 
         const result = await conn.query(`
             SELECT
@@ -1172,16 +1211,9 @@ async obterParametrosSistema() {
             // Campos vindos do JSONB extra_config
             rcas_rotativa: Array.isArray(extra.rcas_rotativa) ? extra.rcas_rotativa : [],
             filiais_cron:  Array.isArray(extra.filiais_cron)  ? extra.filiais_cron  : [],
-            cron_config:   extra.cron_config  || { ativo: false, datetime: '', frequency: 'monthly' },
+            cron_config:   normalizeCronConfig(extra.cron_config || { ativo: false, datetime: '', frequency: 'monthly' }),
             pdf_config:    extra.pdf_config   || { ativo: false, modo_teste: false, id_tester: 0 },
-            winthor_fix_config: {
-                ativo: (typeof extra?.winthor_fix_config?.ativo === 'boolean')
-                    ? extra.winthor_fix_config.ativo
-                    : true,
-                intervalo_minutos: [1, 15, 30].includes(Number(extra?.winthor_fix_config?.intervalo_minutos))
-                    ? Number(extra.winthor_fix_config.intervalo_minutos)
-                    : 15
-            },
+            winthor_fix_config: normalizeWinthorFixConfig(extra.winthor_fix_config),
         };
 
     } catch (err) {
@@ -1209,16 +1241,10 @@ async salvarParametrosSistema(params) {
         const extraConfig = {
             rcas_rotativa: params.rcas_rotativa ?? [],
             filiais_cron:  params.filiais_cron  ?? [],
-            cron_config:   params.cron_config   ?? { ativo: false, datetime: '', frequency: 'monthly' },
+            cron_config:   normalizeCronConfig(params.cron_config ?? { ativo: false, datetime: '', frequency: 'monthly' }),
             pdf_config:    params.pdf_config    ?? { ativo: false, modo_teste: false, id_tester: 0 },
-            winthor_fix_config: {
-                ativo: (typeof params?.winthor_fix_config?.ativo === 'boolean')
-                    ? params.winthor_fix_config.ativo
-                    : true,
-                intervalo_minutos: [1, 15, 30].includes(Number(params?.winthor_fix_config?.intervalo_minutos))
-                    ? Number(params.winthor_fix_config.intervalo_minutos)
-                    : 15
-            },
+            winthor_fix_config: normalizeWinthorFixConfig(params.winthor_fix_config),
+            _system_migrations: { cron_classificacao_ativa_v1: true },
         };
 
         await conn.query(`
@@ -1246,7 +1272,13 @@ async salvarParametrosSistema(params) {
                 fases_bitrix_bloqueio      = EXCLUDED.fases_bitrix_bloqueio,
                 mapa_bitrix                = EXCLUDED.mapa_bitrix,
                 rca_segmento_map           = EXCLUDED.rca_segmento_map,
-                extra_config               = EXCLUDED.extra_config
+                extra_config               = jsonb_set(
+                    EXCLUDED.extra_config,
+                    '{_system_migrations}',
+                    COALESCE(parametros_sistema.extra_config -> '_system_migrations', '{}'::jsonb)
+                        || COALESCE(EXCLUDED.extra_config -> '_system_migrations', '{}'::jsonb),
+                    true
+                )
         `, [
             params.dias_rotativa             ?? 31,
             params.dias_longo_prazo          ?? 60,

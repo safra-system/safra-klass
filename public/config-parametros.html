@@ -86,39 +86,193 @@
             </div>
         </div>
         
+        <form id="configForm">
+            <div class="settings-block" id="automatic-schedule">
+                <div class="section-title">
+                    <i class="fas fa-calendar-alt"></i> Agendamento Automático (CRON)
+                </div>
+
+                <div class="cron-header">
+                    <label class="switch">
+                        <input type="checkbox" id="cron_ativo">
+                        <span class="slider round"></span>
+                    </label>
+                    <span style="font-weight:600; color:var(--text-main)">Ativar Execução</span>
+                </div>
+
+                <div class="execution-mode-selector" id="cron-mode-selector">
+                    <span class="execution-mode-label">Modo de execu&ccedil;&atilde;o</span>
+                    <div class="execution-mode-options" role="radiogroup" aria-label="Modo de execu&ccedil;&atilde;o autom&aacute;tica">
+                        <label class="execution-mode-option">
+                            <input type="radio" name="cron_modo" value="CLASSIFICACAO" checked>
+                            <span><strong>Apenas classifica&ccedil;&atilde;o</strong><small>Atualiza a classe sem movimentar carteiras ou acessar o Bitrix.</small></span>
+                        </label>
+                        <label class="execution-mode-option">
+                            <input type="radio" name="cron_modo" value="MOVIMENTACAO">
+                            <span><strong>Classifica&ccedil;&atilde;o com movimenta&ccedil;&atilde;o de carteiras</strong><small>Preserva o fluxo completo de carteira, RCA, Bitrix e relat&oacute;rios.</small></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="execution-mode-warning" class="execution-mode-warning config-ui-hidden" role="status" aria-live="polite">
+                    Os par&acirc;metros permanecem salvos, mas n&atilde;o ser&atilde;o usados no modo Apenas classifica&ccedil;&atilde;o.
+                </div>
+
+                <div class="form-grid" id="cron-options" style="margin-top:15px; opacity: 0.5; pointer-events: none;">
+
+                    <div class="form-group">
+                        <label><i class="far fa-clock"></i> Data e Hora de Início</label>
+                        <input type="datetime-local" id="cron_datetime">
+                        <small class="hint">Define o horário e o dia de referência.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-sync-alt"></i> Frequência</label>
+                        <select id="cron_frequency" style="display:none;">
+                            <option value="once">Único</option>
+                            <option value="weekly">Semanal</option>
+                            <option value="biweekly">Quinzenal</option>
+                            <option value="monthly" selected>Mensal</option>
+                            <option value="bimonthly">Bimestral</option>
+                            <option value="quarterly">Trimestral</option>
+                            <option value="semiannual">Semestral</option>
+                            <option value="yearly">Anual</option>
+                        </select>
+
+                        <div class="custom-select-wrapper" id="custom_cron_frequency">
+                            <div class="custom-select-trigger">
+                                <span class="trigger-content">
+                                    <i class="fas fa-calendar"></i> Mensal
+                                </span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-options">
+                                <div class="custom-option" data-value="once"><i class="fas fa-calendar-day"></i> Único</div>
+                                <div class="custom-option" data-value="weekly"><i class="fas fa-calendar-week"></i> Semanal</div>
+                                <div class="custom-option" data-value="biweekly"><i class="far fa-calendar-alt"></i> Quinzenal</div>
+                                <div class="custom-option selected" data-value="monthly"><i class="fas fa-calendar"></i> Mensal</div>
+                                <div class="custom-option" data-value="bimonthly"><i class="fas fa-calendar-plus"></i> Bimestral</div>
+                                <div class="custom-option" data-value="quarterly"><i class="fas fa-calendar-check"></i> Trimestral</div>
+                                <div class="custom-option" data-value="semiannual"><i class="fas fa-calendar-times"></i> Semestral</div>
+                                <div class="custom-option" data-value="yearly"><i class="fas fa-birthday-cake"></i> Anual</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:15px; padding:10px; background:rgba(99,102,241,0.1); border-radius:8px; border-left:4px solid var(--primary);">
+                        <small class="hint" id="cron-preview" style="margin:0; color:var(--text-main); font-weight:500;">
+                            Aguardando configuração...
+                        </small>
+                    </div>
+                </div>
+
+                <div class="form-group" id="common-filiais" style="margin-top: 20px;">
+                    <label>Filiais para Processamento (Separadas por vírgula)</label>
+                    <textarea name="filiais_cron" id="filiais_cron" rows="2" placeholder="Ex: 1, 3, 5, 6"></textarea>
+                    <small class="hint">Defina quais filiais o robô automático deve analisar.</small>
+                </div>
+
+                <hr style="border:0; border-top:1px solid var(--border-color); margin:15px 0;">
+
+                <div id="common-winthor-fix" class="winthor-fix-block">
+                <div class="cron-header winthor-fix-header">
+                    <label class="switch">
+                        <input type="checkbox" id="winthor_fix_ativo">
+                        <span class="slider round"></span>
+                    </label>
+                    <div class="winthor-fix-copy">
+                        <span class="winthor-fix-title">Correção Automática Cadastro WinThor</span>
+                        <small class="hint winthor-fix-description">
+                            Confere CATEGORIA com base no CODREDE. Não altera CODATV1 nem CODREDE.
+                        </small>
+                        <small id="winthor-fix-status" class="hint winthor-fix-status"></small>
+                    </div>
+                </div>
+
+                <div class="form-grid" id="winthor-fix-options" style="margin-top:15px;">
+                    <div class="form-group">
+                        <label><i class="fas fa-stopwatch"></i> Intervalo da Correção</label>
+                        <select id="winthor_fix_intervalo" style="display:none;">
+                            <option value="1">A cada 1 minuto</option>
+                            <option value="15" selected>A cada 15 minutos</option>
+                            <option value="30">A cada 30 minutos</option>
+                        </select>
+
+                        <div class="custom-select-wrapper" id="custom_winthor_fix_intervalo">
+                            <div class="custom-select-trigger">
+                                <span class="trigger-content">
+                                    <i class="fas fa-stopwatch"></i> A cada 15 minutos
+                                </span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-options">
+                                <div class="custom-option" data-value="1"><i class="fas fa-bolt"></i> A cada 1 minuto</div>
+                                <div class="custom-option selected" data-value="15"><i class="fas fa-clock"></i> A cada 15 minutos</div>
+                                <div class="custom-option" data-value="30"><i class="far fa-clock"></i> A cada 30 minutos</div>
+                            </div>
+                        </div>
+                        <small class="hint">Define de quanto em quanto tempo a procedure de correção será executada. O intervalo de 1 minuto aumenta o custo da varredura de todos os clientes ativos.</small>
+                    </div>
+
+                    <div class="form-group winthor-bitrix-sync">
+                        <div class="cron-header winthor-bitrix-header">
+                            <label class="switch">
+                                <input type="checkbox" id="winthor_fix_sincronizar_bitrix">
+                                <span class="slider round"></span>
+                            </label>
+                            <div class="winthor-fix-copy">
+                                <span class="winthor-fix-title">Sincronizar classificação no Bitrix</span>
+                                <small class="hint winthor-fix-description">
+                                    Ativo efetivo somente quando o cron principal estiver ativo, o modo for MOVIMENTACAO e esta flag estiver ligada.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fix-actions">
+                    <button type="button" id="btnExecutarWinthorFixAgora" class="btn btn-secondary">
+                        <i class="fas fa-play"></i> Executar Correção Agora
+                    </button>
+                    <button type="button" id="btnRollbackWinthorFixLegado" class="btn btn-secondary">
+                        <i class="fas fa-undo"></i> Rollback Legado
+                    </button>
+                    <small class="hint">Executa imediatamente sem esperar o proximo agendamento. O rollback legado desfaz ajustes antigos de CODATV1/CODREDE com base nos logs.</small>
+                </div>
+                </div>
+            </div>
+
         <div class="card">
             <div class="card-header-strip">
                 <div class="strip-icon"><i class="fas fa-sliders-h"></i></div>
-                <h2>Parâmetros de Movimentação</h2>
+                <h2>Classifica&ccedil;&atilde;o e Movimenta&ccedil;&atilde;o Autom&aacute;tica</h2>
             </div>
 
             <div class="card-body">
-                <form id="configForm">
                     
-                    <div class="settings-block">
+                    <div class="settings-block" id="movement-prazos" data-movement-only>
                         <div class="section-title">
                             <i class="far fa-clock"></i> Prazos e Ciclos
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Dias para Carteira Rotativa</label>
-                                <input type="number" name="dias_rotativa" id="dias_rotativa" required>
+                                <input type="number" name="dias_rotativa" id="dias_rotativa" required data-required-in-movement>
                                 <small class="hint">Clientes sem compra acima deste valor entram em alerta.</small>
                             </div>
                             <div class="form-group">
                                 <label>Dias para Longo Prazo (RCA 118)</label>
-                                <input type="number" name="dias_longo_prazo" id="dias_longo_prazo" required>
+                                <input type="number" name="dias_longo_prazo" id="dias_longo_prazo" required data-required-in-movement>
                                 <small class="hint">Clientes acima deste valor são movidos para o RCA 118.</small>
                             </div>
                             <div class="form-group">
                                 <label>Proteção Pós-Upgrade (Dias)</label>
-                                <input type="number" name="dias_protecao_upgrade" id="dias_protecao_upgrade" required>
+                                <input type="number" name="dias_protecao_upgrade" id="dias_protecao_upgrade" required data-required-in-movement>
                                 <small class="hint">Tempo de blindagem após subir de nível.</small>
                             </div>
                         </div>
                     </div>
 
-                    <div class="settings-block">
+                    <div class="settings-block" id="common-sazonalidade">
                         <div class="section-title">
                             <i class="fas fa-cloud-sun"></i> Sazonalidade (Blindagem de Downgrade)
                         </div>
@@ -144,7 +298,7 @@
                         </div>
                     </div>
 
-                    <div class="settings-block">
+                    <div class="settings-block" id="movement-rca" data-movement-only>
                         <div class="section-title">
                             <i class="fas fa-users-cog"></i> Distribuição de Carteira (RCAs)
                         </div>
@@ -166,7 +320,7 @@
                         </div>
                         </div>
 
-                    <div class="settings-block">
+                    <div class="settings-block" id="movement-bitrix" data-movement-only>
                         <div class="section-title">
                             <i class="fas fa-ban"></i> Fases de Bloqueio (Bitrix)
                         </div>
@@ -177,127 +331,8 @@
                         </div>
                     </div>
 
-                    <div class="settings-block">
-                        <div class="section-title">
-                            <i class="fas fa-calendar-alt"></i> Agendamento Automático (CRON)
-                        </div>
-                        
-                        <div class="cron-header">
-                            <label class="switch">
-                                <input type="checkbox" id="cron_ativo">
-                                <span class="slider round"></span>
-                            </label>
-                            <span style="font-weight:600; color:var(--text-main)">Ativar Execução</span>
-                        </div>
 
-                        <div class="form-grid" id="cron-options" style="margin-top:15px; opacity: 0.5; pointer-events: none;">
-                            
-                            <div class="form-group">
-                                <label><i class="far fa-clock"></i> Data e Hora de Início</label>
-                                <input type="datetime-local" id="cron_datetime">
-                                <small class="hint">Define o horário e o dia de referência.</small>
-                            </div>
-
-                            <div class="form-group">
-                                <label><i class="fas fa-sync-alt"></i> Frequência</label>
-                                <select id="cron_frequency" style="display:none;">
-                                    <option value="once">Único</option>
-                                    <option value="weekly">Semanal</option>
-                                    <option value="biweekly">Quinzenal</option>
-                                    <option value="monthly" selected>Mensal</option>
-                                    <option value="bimonthly">Bimestral</option>
-                                    <option value="quarterly">Trimestral</option>
-                                    <option value="semiannual">Semestral</option>
-                                    <option value="yearly">Anual</option>
-                                </select>
-
-                                <div class="custom-select-wrapper" id="custom_cron_frequency">
-                                    <div class="custom-select-trigger">
-                                        <span class="trigger-content">
-                                            <i class="fas fa-calendar"></i> Mensal
-                                        </span>
-                                        <i class="fas fa-chevron-down arrow"></i>
-                                    </div>
-                                    <div class="custom-options">
-                                        <div class="custom-option" data-value="once"><i class="fas fa-calendar-day"></i> Único</div>
-                                        <div class="custom-option" data-value="weekly"><i class="fas fa-calendar-week"></i> Semanal</div>
-                                        <div class="custom-option" data-value="biweekly"><i class="far fa-calendar-alt"></i> Quinzenal</div>
-                                        <div class="custom-option selected" data-value="monthly"><i class="fas fa-calendar"></i> Mensal</div>
-                                        <div class="custom-option" data-value="bimonthly"><i class="fas fa-calendar-plus"></i> Bimestral</div>
-                                        <div class="custom-option" data-value="quarterly"><i class="fas fa-calendar-check"></i> Trimestral</div>
-                                        <div class="custom-option" data-value="semiannual"><i class="fas fa-calendar-times"></i> Semestral</div>
-                                        <div class="custom-option" data-value="yearly"><i class="fas fa-birthday-cake"></i> Anual</div>
-                                    </div>
-                                </div>
-                            </div>
-                        
-                            <div style="margin-top:15px; padding:10px; background:rgba(99,102,241,0.1); border-radius:8px; border-left:4px solid var(--primary);">
-                                <small class="hint" id="cron-preview" style="margin:0; color:var(--text-main); font-weight:500;">
-                                    Aguardando configuração...
-                                </small>
-                            </div>
-                        </div>
-
-                        <div class="form-group" style="margin-top: 20px;">
-                            <label>Filiais para Processamento (Separadas por vírgula)</label>
-                            <textarea name="filiais_cron" id="filiais_cron" rows="2" placeholder="Ex: 1, 3, 5, 6"></textarea>
-                            <small class="hint">Defina quais filiais o robô automático deve analisar.</small>
-                        </div>
-
-                        <hr style="border:0; border-top:1px solid var(--border-color); margin:15px 0;">
-
-                        <div class="cron-header">
-                            <label class="switch">
-                                <input type="checkbox" id="winthor_fix_ativo">
-                                <span class="slider round"></span>
-                            </label>
-                            <div>
-                                <span style="font-weight:600; color:var(--text-main)">Correção Automática Cadastro WinThor</span>
-                                <small class="hint" style="margin:0">
-                                    Ativado: executa verificação/correção periódica de CATEGORIA, CODATV1 e CODREDE. Desativado: não executa.
-                                </small>
-                                <small class="hint" id="winthor-fix-status" style="margin-top:6px; font-weight:600;"></small>
-                            </div>
-                        </div>
-
-                        <div class="form-grid" id="winthor-fix-options" style="margin-top:15px;">
-                            <div class="form-group">
-                                <label><i class="fas fa-stopwatch"></i> Intervalo da Correção</label>
-                                <select id="winthor_fix_intervalo" style="display:none;">
-                                    <option value="1">A cada 1 minuto</option>
-                                    <option value="15" selected>A cada 15 minutos</option>
-                                    <option value="30">A cada 30 minutos</option>
-                                </select>
-
-                                <div class="custom-select-wrapper" id="custom_winthor_fix_intervalo">
-                                    <div class="custom-select-trigger">
-                                        <span class="trigger-content">
-                                            <i class="fas fa-stopwatch"></i> A cada 15 minutos
-                                        </span>
-                                        <i class="fas fa-chevron-down arrow"></i>
-                                    </div>
-                                    <div class="custom-options">
-                                        <div class="custom-option" data-value="1"><i class="fas fa-bolt"></i> A cada 1 minuto</div>
-                                        <div class="custom-option selected" data-value="15"><i class="fas fa-clock"></i> A cada 15 minutos</div>
-                                        <div class="custom-option" data-value="30"><i class="far fa-clock"></i> A cada 30 minutos</div>
-                                    </div>
-                                </div>
-                                <small class="hint">Define de quanto em quanto tempo a procedure de correção será executada.</small>
-                            </div>
-                        </div>
-
-                        <div class="fix-actions">
-                            <button type="button" id="btnExecutarWinthorFixAgora" class="btn btn-secondary">
-                                <i class="fas fa-play"></i> Executar Correção Agora
-                            </button>
-                            <button type="button" id="btnRollbackWinthorFixLegado" class="btn btn-secondary">
-                                <i class="fas fa-undo"></i> Rollback Legado
-                            </button>
-                            <small class="hint">Executa imediatamente sem esperar o proximo agendamento. O rollback legado desfaz ajustes antigos de CODATV1/CODREDE com base nos logs.</small>
-                        </div>
-                    </div>
-
-                    <div class="settings-block">
+                    <div class="settings-block" id="movement-pdf" data-movement-only>
                         <div class="section-title">
                             <i class="fas fa-file-pdf"></i> Relatórios PDF (Bitrix)
                         </div>
@@ -336,13 +371,13 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary" id="saveBtn">
+                        <button type="submit" class="btn btn-primary" id="saveBtn" disabled>
                             <i class="fas fa-save"></i> Salvar Alterações
                         </button>
                     </div>
-                </form>
             </div>
         </div>
+        </form>
 
 
 

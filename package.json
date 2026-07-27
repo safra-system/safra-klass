@@ -6,8 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "preview": "node preview-server.js",
     "thin": "set NODE_ORACLEDB_DRIVER_MODE=thin && node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/unit/all.test.js"
   },
   "dependencies": {
     "axios": "^1.13.2",
