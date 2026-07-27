@@ -70,6 +70,11 @@ test('carrega e salva um unico modo preservando valores', () => {
   assert.match(html, /id=.saveBtn.[^>]*disabled/);
 });
 
+test('fallback sem cron inicia ativo em classificacao', () => {
+  assert.match(script, /elAtivo\.checked\s*=\s*true/);
+  assert.match(script, /setSelectedExecutionMode\('CLASSIFICACAO'\)/);
+});
+
 test('bloqueio visual usa classe aria e inert', () => {
   assert.match(script, /function getSelectedExecutionMode\(\)/);
   assert.match(script, /function updateExecutionModeUi\(\)/);

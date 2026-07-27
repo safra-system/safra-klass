@@ -583,7 +583,7 @@
                     syncCustomSelect('custom_cron_frequency', elFreq.value);
                     setSelectedExecutionMode(d.cron_config?.modo);
                 } else {
-                    elAtivo.checked = false;
+                    elAtivo.checked = true;
                     setSelectedExecutionMode('CLASSIFICACAO');
                 }
 

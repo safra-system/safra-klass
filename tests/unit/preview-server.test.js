@@ -67,7 +67,7 @@ test('preview tem grafo de imports isolado e bind fixo em loopback', () => {
   assert.equal(preview.PREVIEW_HOST, '127.0.0.1');
 });
 
-test('preview autentica usuario ficticio e entrega parametros inativos', async () => {
+test('preview autentica usuario ficticio e inicia ativo em classificacao', async () => {
   await withPreviewServer(async (baseUrl) => {
     const userResponse = await fetch(`${baseUrl}/api/user-info`);
     assert.equal(userResponse.status, 200);
@@ -80,7 +80,7 @@ test('preview autentica usuario ficticio e entrega parametros inativos', async (
     assert.equal(paramsResponse.status, 200);
     const params = await paramsResponse.json();
     assert.equal(params.success, true);
-    assert.equal(params.data.cron_config.ativo, false);
+    assert.equal(params.data.cron_config.ativo, true);
     assert.equal(params.data.cron_config.modo, 'CLASSIFICACAO');
     assert.equal(params.data.winthor_fix_config.ativo, false);
     assert.equal(params.data.winthor_fix_config.sincronizar_bitrix, false);

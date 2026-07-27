@@ -27,7 +27,7 @@ const previewParameters = Object.freeze({
   mapa_bitrix: {},
   rca_segmento_map: {},
   cron_config: {
-    ativo: false,
+    ativo: true,
     modo: 'CLASSIFICACAO',
     datetime: '',
     frequency: 'monthly'
