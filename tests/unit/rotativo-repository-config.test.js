@@ -45,10 +45,12 @@ function createCapturingRepository() {
 
 function createRepositoryWithStoredExtra(extra_config) {
   const row = { extra_config };
+  const queries = [];
   const pool = {
     async connect() {
       return {
         async query(query, params) {
+          queries.push({ query, params });
           if (query.includes('UPDATE parametros_sistema')) {
             const configuraCronComJsonb = /jsonb_build_object\('ativo', true, 'modo', 'CLASSIFICACAO'\)/.test(query);
             const gravaMarcadorComJsonb = /jsonb_build_object\('cron_classificacao_ativa_v1', true\)/.test(query);
@@ -99,8 +101,36 @@ function createRepositoryWithStoredExtra(extra_config) {
 
   return {
     repo: new RotativoRepository(silentLogger, { pool }),
-    getExtra: () => row.extra_config
+    getExtra: () => row.extra_config,
+    getQueries: () => queries
   };
+}
+
+function createRepositoryWithFailedInitialization() {
+  const queries = [];
+  const pool = {
+    async connect() {
+      return {
+        async query(query) {
+          queries.push(query);
+          if (query.includes('UPDATE parametros_sistema')) {
+            throw new Error('falha simulada na inicializacao');
+          }
+          return { rows: [] };
+        },
+        release() {}
+      };
+    }
+  };
+
+  return {
+    repo: new RotativoRepository(silentLogger, { pool }),
+    getQueries: () => queries
+  };
+}
+
+function compactSql(query) {
+  return query.replace(/\s+/g, ' ').trim();
 }
 
 function fullPayload(cron_config) {
@@ -157,6 +187,20 @@ test('inicializa uma vez como classificacao ativa preservando o agendamento', as
   assert.equal(getExtra()._system_migrations.cron_classificacao_ativa_v1, true);
 });
 
+test('inicializacao usa SQL idempotente que mescla somente cron e marcador', async () => {
+  const { repo, getQueries } = createRepositoryWithStoredExtra({
+    cron_config: { datetime: '2026-08-02T23:32', frequency: 'monthly' }
+  });
+
+  await repo.obterParametrosSistema();
+
+  const update = compactSql(getQueries().find(({ query }) => query.includes('UPDATE parametros_sistema')).query);
+  assert.match(update, /SET extra_config = jsonb_set\(/);
+  assert.match(update, /'\{cron_config\}', COALESCE\(extra_config -> 'cron_config', '\{\}'::jsonb\) \|\| jsonb_build_object\('ativo', true, 'modo', 'CLASSIFICACAO'\)/);
+  assert.match(update, /'\{_system_migrations\}', COALESCE\(extra_config -> '_system_migrations', '\{\}'::jsonb\) \|\| jsonb_build_object\('cron_classificacao_ativa_v1', true\)/);
+  assert.match(update, /WHERE NOT \(COALESCE\(extra_config, '\{\}'::jsonb\) -> '_system_migrations' \? 'cron_classificacao_ativa_v1'\)/);
+});
+
 test('marcador existente preserva a escolha posterior do usuario', async () => {
   const { repo } = createRepositoryWithStoredExtra({
     cron_config: {
@@ -175,7 +219,7 @@ test('marcador existente preserva a escolha posterior do usuario', async () => {
 });
 
 test('salvamento preserva o marcador interno', async () => {
-  const { repo, getExtra } = createRepositoryWithStoredExtra({
+  const { repo, getExtra, getQueries } = createRepositoryWithStoredExtra({
     _system_migrations: { cron_classificacao_ativa_v1: true }
   });
 
@@ -187,6 +231,19 @@ test('salvamento preserva o marcador interno', async () => {
   }));
 
   assert.equal(getExtra()._system_migrations.cron_classificacao_ativa_v1, true);
+  const upsert = compactSql(getQueries().find(({ query }) => query.includes('INSERT INTO parametros_sistema')).query);
+  assert.match(upsert, /extra_config = jsonb_set\(/);
+  assert.match(upsert, /'\{_system_migrations\}', COALESCE\(parametros_sistema\.extra_config -> '_system_migrations', '\{\}'::jsonb\) \|\| COALESCE\(EXCLUDED\.extra_config -> '_system_migrations', '\{\}'::jsonb\)/);
+});
+
+test('falha na inicializacao impede SELECT subsequente', async () => {
+  const { repo, getQueries } = createRepositoryWithFailedInitialization();
+
+  const params = await repo.obterParametrosSistema();
+
+  assert.equal(params, null);
+  assert.equal(getQueries().filter(query => query.includes('UPDATE parametros_sistema')).length, 1);
+  assert.equal(getQueries().some(query => query.includes('SELECT')), false);
 });
 
 test('salvamento preserva os parâmetros desabilitados e grava o modo', async () => {
