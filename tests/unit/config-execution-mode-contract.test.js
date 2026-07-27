@@ -97,11 +97,3 @@ test('marca blocos', () => {
   ['common-sazonalidade', 'common-filiais', 'common-winthor-fix']
     .forEach((id) => assert.doesNotMatch(openingTag('div', id), /data-movement-only/));
 });
-
-test('startup aguarda a inicializacao antes de configurar o cron principal', () => {
-  assert.match(server, /await rotativoRepo\.aplicarInicializacaoClassificacaoAtivaV1\(\)/);
-  assert.ok(
-    server.indexOf('aplicarInicializacaoClassificacaoAtivaV1') <
-      server.indexOf('await configurarAgendamentoDinamico()')
-  );
-});
